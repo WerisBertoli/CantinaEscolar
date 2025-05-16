@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Cantina do Erlach</title>
     <link rel="stylesheet" href="src/style.css">
+    <link rel="stylesheet" href="https://fonts.apple.com/sf-pro">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -33,9 +34,12 @@
     <div id="app-content" style="display: none;">
         <div class="container">
             <header>
+                <button id="menu-toggle" class="menu-toggle">
+                    <i class="fas fa-bars"></i>
+                </button>
                 <h1>Sistema de Cantina do Erlach</h1>
-                <button id="logout-btn" class="btn-secondary">Sair</button>
-                <nav>
+                <button id="logout-btn" class="btn-secondary desktop-only">Sair</button>
+                <nav id="nav-menu" class="nav-menu">
                     <ul class="menu">
                         <li><a href="#" class="menu-item active" data-target="home">Início</a></li>
                         <li><a href="#" class="menu-item" data-target="alunos">Alunos</a></li>
@@ -43,6 +47,7 @@
                         <li><a href="#" class="menu-item" data-target="consumo">Registrar Consumo</a></li>
                         <li><a href="#" class="menu-item" data-target="relatorios">Relatórios</a></li>
                         <li><a href="#" class="menu-item" data-target="mensagens">Mensagens</a></li>
+                        <li class="mobile-only"><button id="logout-btn-mobile" class="btn-secondary">Sair</button></li>
                     </ul>
                 </nav>
             </header>
@@ -52,23 +57,23 @@
                 <section id="home" class="page active">
                     <div class="dashboard">
                         <h2>Dashboard</h2>
-                        <div class="cards">
+                        <div class="cards" id="dashboard-cards">
                             <div class="card">
                                 <i class="fas fa-user-graduate"></i>
                                 <h3>Alunos</h3>
-                                <p id="total-alunos">0 cadastrados</p>
+                                <p id="total-alunos" class="skeleton">0 cadastrados</p>
                                 <button class="btn-primary" onclick="navegarPara('alunos')">Gerenciar</button>
                             </div>
                             <div class="card">
                                 <i class="fas fa-cookie-bite"></i>
                                 <h3>Produtos</h3>
-                                <p id="total-produtos">0 cadastrados</p>
+                                <p id="total-produtos" class="skeleton">0 cadastrados</p>
                                 <button class="btn-primary" onclick="navegarPara('produtos')">Gerenciar</button>
                             </div>
                             <div class="card">
                                 <i class="fas fa-cash-register"></i>
                                 <h3>Vendas Hoje</h3>
-                                <p id="vendas-hoje">R$ 0,00</p>
+                                <p id="vendas-hoje" class="skeleton">R$ 0,00</p>
                                 <button class="btn-primary" onclick="navegarPara('consumo')">Registrar</button>
                             </div>
                             <div class="card">
@@ -76,6 +81,23 @@
                                 <h3>Relatórios</h3>
                                 <p>Visualizar resumos</p>
                                 <button class="btn-primary" onclick="navegarPara('relatorios')">Acessar</button>
+                            </div>
+                        </div>
+                        <!-- Botão Flutuante (FAB) -->
+                        <div class="fab-container">
+                            <button id="fab-main" class="fab">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                            <div class="fab-options">
+                                <button class="fab-option" onclick="navegarPara('consumo')" title="Registrar Consumo">
+                                    <i class="fas fa-cash-register"></i>
+                                </button>
+                                <button class="fab-option" onclick="navegarPara('alunos')" title="Adicionar Aluno">
+                                    <i class="fas fa-user-plus"></i>
+                                </button>
+                                <button class="fab-option" onclick="navegarPara('produtos')" title="Adicionar Produto">
+                                    <i class="fas fa-cookie-bite"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -343,3 +365,5 @@
         window.firebaseAuthModules = { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged };
     </script>
     <script defer src="src/main.js"></script>
+</body>
+</html>

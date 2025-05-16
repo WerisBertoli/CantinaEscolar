@@ -6,7 +6,15 @@ const loginPage = document.getElementById('login-page');
 const appContent = document.getElementById('app-content');
 const loginBtn = document.getElementById('login-btn');
 const logoutBtn = document.getElementById('logout-btn');
+const logoutBtnMobile = document.getElementById('logout-btn-mobile');
+const menuToggle = document.getElementById('menu-toggle');
+const navMenu = document.getElementById('nav-menu');
+const mainContent = document.querySelector('main');
 const loginError = document.getElementById('login-error');
+
+// Referências para o FAB
+const fabMain = document.getElementById('fab-main');
+const fabContainer = document.querySelector('.fab-container');
 
 // Verificar o estado de autenticação ao carregar a página
 onAuthStateChanged(auth, (user) => {
@@ -43,6 +51,35 @@ logoutBtn.addEventListener('click', async () => {
     }
 });
 
+logoutBtnMobile.addEventListener('click', async () => {
+    try {
+        await signOut(auth);
+        navMenu.classList.remove('open');
+        mainContent.classList.remove('shifted');
+    } catch (error) {
+        console.error('Erro ao fazer logout:', error);
+    }
+});
+
+// Evento para abrir/fechar o menu hambúrguer
+menuToggle.addEventListener('click', () => {
+    navMenu.classList.toggle('open');
+    mainContent.classList.toggle('shifted');
+});
+
+// Fechar o menu ao clicar em um item
+document.querySelectorAll('.menu-item').forEach(item => {
+    item.addEventListener('click', () => {
+        navMenu.classList.remove('open');
+        mainContent.classList.remove('shifted');
+    });
+});
+
+// Evento para abrir/fechar o FAB
+fabMain.addEventListener('click', () => {
+    fabContainer.classList.toggle('open');
+});
+
 // Dados iniciais
 let alunos = [];
 let produtos = [];
@@ -64,6 +101,9 @@ function navegarPara(pagina) {
     } else {
         console.error(`Página ou item de menu não encontrado: ${pagina}`);
     }
+
+    // Fechar o FAB ao navegar
+    fabContainer.classList.remove('open');
 }
 
 // Atualizar dashboard
@@ -76,9 +116,18 @@ function atualizarDashboard() {
         .reduce((sum, c) => sum + c.total, 0)
         .toFixed(2);
 
-    document.getElementById('total-alunos').textContent = `${totalAlunos} cadastrados`;
-    document.getElementById('total-produtos').textContent = `${totalProdutos} cadastrados`;
-    document.getElementById('vendas-hoje').textContent = `R$ ${vendasHoje.replace('.', ',')}`;
+    const totalAlunosEl = document.getElementById('total-alunos');
+    const totalProdutosEl = document.getElementById('total-produtos');
+    const vendasHojeEl = document.getElementById('vendas-hoje');
+
+    totalAlunosEl.textContent = `${totalAlunos} cadastrados`;
+    totalAlunosEl.classList.remove('skeleton');
+
+    totalProdutosEl.textContent = `${totalProdutos} cadastrados`;
+    totalProdutosEl.classList.remove('skeleton');
+
+    vendasHojeEl.textContent = `R$ ${vendasHoje.replace('.', ',')}`;
+    vendasHojeEl.classList.remove('skeleton');
 }
 
 // Gerenciar alunos
@@ -127,8 +176,13 @@ async function salvarAluno(event) {
         const aluno = { nome, serie, responsavel, contato, pix: pix || null };
         const alunosCollection = collection(db, 'alunos');
         const docRef = await addDoc(alunosCollection, aluno);
+        aluno.id = docRef.id;
+        alunos.push(aluno);
         console.log('Aluno salvo com sucesso:', aluno, 'ID:', docRef.id);
         document.getElementById('aluno-form').reset();
+        atualizarTabelaAlunos();
+        atualizarSelectAlunos();
+        atualizarDashboard();
         alert('Aluno cadastrado com sucesso!');
     } catch (error) {
         console.error('Erro ao salvar aluno:', error);
@@ -149,7 +203,10 @@ async function editarAluno(id, index) {
 
     try {
         await deleteDoc(doc(db, 'alunos', id));
+        alunos.splice(index, 1);
         console.log('Aluno removido para edição:', id);
+        atualizarTabelaAlunos();
+        atualizarSelectAlunos();
     } catch (error) {
         console.error('Erro ao remover aluno para edição:', error);
         alert('Erro ao editar aluno. Tente novamente.');
@@ -164,9 +221,11 @@ async function excluirAluno(id, index) {
 
     try {
         await deleteDoc(doc(db, 'alunos', id));
+        alunos.splice(index, 1);
         console.log('Aluno excluído do Firestore:', id);
         atualizarDashboard();
         atualizarSelectAlunos();
+        atualizarTabelaAlunos();
     } catch (error) {
         console.error('Erro ao excluir aluno:', error);
         alert('Erro ao excluir aluno: ' + error.message);
@@ -220,8 +279,13 @@ async function salvarProduto(event) {
         const produto = { nome, preco, imagem: imagem || null };
         const produtosCollection = collection(db, 'produtos');
         const docRef = await addDoc(produtosCollection, produto);
+        produto.id = docRef.id;
+        produtos.push(produto);
         console.log('Produto salvo no Firestore:', produto, 'ID:', docRef.id);
         document.getElementById('produto-form').reset();
+        atualizarListaProdutos();
+        atualizarProdutosConsumo();
+        atualizarDashboard();
         alert('Produto cadastrado com sucesso!');
     } catch (error) {
         console.error('Erro ao salvar produto:', error);
@@ -240,7 +304,10 @@ async function editarProduto(id, index) {
 
     try {
         await deleteDoc(doc(db, 'produtos', id));
+        produtos.splice(index, 1);
         console.log('Produto removido para edição:', id);
+        atualizarListaProdutos();
+        atualizarProdutosConsumo();
     } catch (error) {
         console.error('Erro ao remover produto para edição:', error);
         alert('Erro ao editar produto. Tente novamente.');
@@ -255,8 +322,10 @@ async function excluirProduto(id, index) {
 
     try {
         await deleteDoc(doc(db, 'produtos', id));
+        produtos.splice(index, 1);
         console.log('Produto excluído do Firestore:', id);
         atualizarDashboard();
+        atualizarListaProdutos();
         atualizarProdutosConsumo();
     } catch (error) {
         console.error('Erro ao excluir produto:', error);
@@ -274,7 +343,7 @@ function atualizarSelectAlunos() {
     alunos.forEach((aluno, index) => {
         const option = document.createElement('option');
         option.value = index;
-        option.textContent = `${aluno.nome} (${aluno.serie})`; // Exibe nome e turma
+        option.textContent = `${aluno.nome} (${aluno.serie})`;
         select.appendChild(option);
 
         const optionRelatorio = document.createElement('option');
@@ -372,19 +441,23 @@ async function registrarConsumo(event) {
 
     try {
         const consumo = {
-            alunoIndex: parseInt(alunoIndex), // Garantir que alunoIndex seja salvo como número
-            alunoNome: alunoSelecionado.nome, // Salvar o nome do aluno para depuração
-            data, // data já vem no formato YYYY-MM-DD do input
+            alunoIndex: parseInt(alunoIndex),
+            alunoNome: alunoSelecionado.nome,
+            data,
             itens: selectedItems.map(item => ({ nome: item.nome, preco: item.preco, quantidade: item.quantidade })),
             total: selectedItems.reduce((sum, item) => sum + item.preco * item.quantidade, 0)
         };
         const consumosCollection = collection(db, 'consumos');
         const docRef = await addDoc(consumosCollection, consumo);
+        consumo.id = docRef.id;
+        consumos.push(consumo);
         console.log('Consumo registrado no Firestore:', consumo, 'ID:', docRef.id);
         document.getElementById('consumo-form').reset();
         selectedItems = [];
         document.querySelectorAll('.produto-selecao').forEach(el => el.classList.remove('selecionado'));
         atualizarResumoConsumo();
+        atualizarTabelaConsumos();
+        atualizarDashboard();
         alert('Consumo registrado com sucesso!');
     } catch (error) {
         console.error('Erro ao registrar consumo:', error);
@@ -401,7 +474,7 @@ function atualizarTabelaConsumos() {
     consumosOrdenados.forEach((consumo, index) => {
         const aluno = alunos[consumo.alunoIndex];
         const itens = consumo.itens.map(item => `${item.nome} (x${item.quantidade})`).join(', ');
-        const dataFormatada = consumo.data.split('T')[0].split('-').reverse().join('/'); // Formato DD/MM/YYYY
+        const dataFormatada = consumo.data.split('T')[0].split('-').reverse().join('/');
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${dataFormatada}</td>
@@ -424,8 +497,10 @@ async function excluirConsumo(id, index) {
 
     try {
         await deleteDoc(doc(db, 'consumos', id));
+        consumos.splice(index, 1);
         console.log('Consumo excluído do Firestore:', id);
         atualizarDashboard();
+        atualizarTabelaConsumos();
     } catch (error) {
         console.error('Erro ao excluir consumo:', error);
         alert('Erro ao excluir consumo: ' + error.message);
@@ -559,7 +634,7 @@ async function gerarMensagens() {
             const consumosPorDia = {};
             let total = 0;
             consumosAluno.forEach(c => {
-                const dataFormatada = c.data.split('T')[0].split('-').reverse().join('/'); // Formato DD/MM/YYYY
+                const dataFormatada = c.data.split('T')[0].split('-').reverse().join('/');
                 if (!consumosPorDia[dataFormatada]) {
                     consumosPorDia[dataFormatada] = [];
                 }
@@ -684,6 +759,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Configurar eventos dos formulários e botões
     document.getElementById('aluno-form').addEventListener('submit', salvarAluno);
     document.getElementById('produto-form').addEventListener('submit', salvarProduto);
     document.getElementById('consumo-form').addEventListener('submit', registrarConsumo);
@@ -695,6 +771,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('exportar-relatorio').addEventListener('click', exportarRelatorio);
     document.getElementById('gerar-mensagens').addEventListener('click', gerarMensagens);
 
+    // Definir a data atual como padrão no input de data do consumo
+    const dataConsumo = document.getElementById('data-consumo');
+    if (dataConsumo) {
+        const hoje = new Date();
+        dataConsumo.value = hoje.toISOString().split('T')[0];
+    }
+
+    // Carregar dados do Firestore
     if (window.db) {
         carregarDados();
     } else {
