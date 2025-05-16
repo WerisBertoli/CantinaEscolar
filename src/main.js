@@ -1,3 +1,48 @@
+const { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } = window.firebaseAuthModules;
+const auth = getAuth();
+
+// Referências aos elementos da tela de login
+const loginPage = document.getElementById('login-page');
+const appContent = document.getElementById('app-content');
+const loginBtn = document.getElementById('login-btn');
+const logoutBtn = document.getElementById('logout-btn');
+const loginError = document.getElementById('login-error');
+
+// Verificar o estado de autenticação ao carregar a página
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        loginPage.style.display = 'none';
+        appContent.style.display = 'block';
+        console.log('Usuário logado:', user.email);
+    } else {
+        loginPage.style.display = 'flex';
+        appContent.style.display = 'none';
+        console.log('Nenhum usuário logado.');
+    }
+});
+
+// Evento de login
+loginBtn.addEventListener('click', async () => {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
+        loginError.textContent = '';
+    } catch (error) {
+        loginError.textContent = 'Erro ao fazer login: ' + (error.message.includes('wrong-password') ? 'Senha incorreta.' : 'E-mail não encontrado.');
+    }
+});
+
+// Evento de logout
+logoutBtn.addEventListener('click', async () => {
+    try {
+        await signOut(auth);
+    } catch (error) {
+        console.error('Erro ao fazer logout:', error);
+    }
+});
+
 // Dados iniciais
 let alunos = [];
 let produtos = [];
@@ -229,12 +274,12 @@ function atualizarSelectAlunos() {
     alunos.forEach((aluno, index) => {
         const option = document.createElement('option');
         option.value = index;
-        option.textContent = aluno.nome;
+        option.textContent = `${aluno.nome} (${aluno.serie})`; // Exibe nome e turma
         select.appendChild(option);
 
         const optionRelatorio = document.createElement('option');
         optionRelatorio.value = index;
-        optionRelatorio.textContent = aluno.nome;
+        optionRelatorio.textContent = `${aluno.nome} (${aluno.serie})`;
         selectRelatorio.appendChild(optionRelatorio);
     });
 }
@@ -316,12 +361,19 @@ async function registrarConsumo(event) {
         return;
     }
 
+    const alunoSelecionado = alunos[parseInt(alunoIndex)];
+    if (!alunoSelecionado) {
+        alert('Aluno inválido. Por favor, selecione um aluno válido.');
+        return;
+    }
+
     const { collection, addDoc } = window.firestoreModules;
     const db = window.db;
 
     try {
         const consumo = {
             alunoIndex: parseInt(alunoIndex), // Garantir que alunoIndex seja salvo como número
+            alunoNome: alunoSelecionado.nome, // Salvar o nome do aluno para depuração
             data, // data já vem no formato YYYY-MM-DD do input
             itens: selectedItems.map(item => ({ nome: item.nome, preco: item.preco, quantidade: item.quantidade })),
             total: selectedItems.reduce((sum, item) => sum + item.preco * item.quantidade, 0)
@@ -344,7 +396,6 @@ function atualizarTabelaConsumos() {
     const tbody = document.querySelector('#tabela-consumos tbody');
     tbody.innerHTML = '';
 
-    // Ordenar consumos por data (da menor para a maior)
     const consumosOrdenados = [...consumos].sort((a, b) => new Date(a.data) - new Date(b.data));
 
     consumosOrdenados.forEach((consumo, index) => {
@@ -402,7 +453,7 @@ async function gerarRelatorio() {
             where('data', '<=', dataFim.toISOString().split('T')[0])
         );
         if (alunoIndex !== '') {
-            q = query(q, where('alunoIndex', '==', alunoIndex));
+            q = query(q, where('alunoIndex', '==', parseInt(alunoIndex)));
         }
         const querySnapshot = await getDocs(q);
         const consumosFiltrados = [];
@@ -502,14 +553,12 @@ async function gerarMensagens() {
         container.innerHTML = '';
 
         alunos.forEach((aluno, index) => {
-            const consumosAluno = consumosFiltrados.filter(c => c.alunoIndex == index);
+            const consumosAluno = consumosFiltrados.filter(c => c.alunoIndex === index);
             if (consumosAluno.length === 0) return;
 
-            // Agrupar consumos por data
             const consumosPorDia = {};
             let total = 0;
             consumosAluno.forEach(c => {
-                // Usar diretamente a data como string do Firestore para evitar ajustes de fuso
                 const dataFormatada = c.data.split('T')[0].split('-').reverse().join('/'); // Formato DD/MM/YYYY
                 if (!consumosPorDia[dataFormatada]) {
                     consumosPorDia[dataFormatada] = [];
@@ -520,7 +569,6 @@ async function gerarMensagens() {
                 });
             });
 
-            // Gerar texto da mensagem com consumos diários
             let itensTexto = '';
             for (const [data, itens] of Object.entries(consumosPorDia)) {
                 itensTexto += `${data}:\n- ${itens.join('\n- ')}\n\n`;
@@ -567,7 +615,6 @@ function carregarDados() {
     const db = window.db;
 
     try {
-        // Carregar alunos
         const alunosCollection = collection(db, 'alunos');
         onSnapshot(alunosCollection, (snapshot) => {
             console.log('Carregando alunos...');
@@ -585,7 +632,6 @@ function carregarDados() {
             alert('Erro ao carregar dados de alunos. Verifique a conexão.');
         });
 
-        // Carregar produtos
         const produtosCollection = collection(db, 'produtos');
         onSnapshot(produtosCollection, (snapshot) => {
             console.log('Carregando produtos...');
@@ -603,7 +649,6 @@ function carregarDados() {
             alert('Erro ao carregar dados de produtos. Verifique a conexão.');
         });
 
-        // Carregar consumos
         const consumosCollection = collection(db, 'consumos');
         onSnapshot(consumosCollection, (snapshot) => {
             console.log('Carregando consumos...');
