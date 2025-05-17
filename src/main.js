@@ -7,6 +7,16 @@ const appContent = document.getElementById('app-content');
 const loginBtn = document.getElementById('login-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const loginError = document.getElementById('login-error');
+const notificationArea = document.getElementById('notification-area');
+
+// Função para exibir notificações visuais
+function mostrarNotificacao(mensagem, tipo = 'success') {
+    const notificacao = document.createElement('div');
+    notificacao.textContent = mensagem;
+    notificacao.className = `notification ${tipo}`;
+    notificationArea.appendChild(notificacao);
+    setTimeout(() => notificacao.remove(), 3000);
+}
 
 // Verificar o estado de autenticação ao carregar a página
 onAuthStateChanged(auth, (user) => {
@@ -25,21 +35,34 @@ onAuthStateChanged(auth, (user) => {
 loginBtn.addEventListener('click', async () => {
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
+    loginBtn.disabled = true;
+    loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Entrando...';
 
     try {
         await signInWithEmailAndPassword(auth, email, password);
         loginError.textContent = '';
     } catch (error) {
         loginError.textContent = 'Erro ao fazer login: ' + (error.message.includes('wrong-password') ? 'Senha incorreta.' : 'E-mail não encontrado.');
+        mostrarNotificacao('Erro ao fazer login: ' + (error.message.includes('wrong-password') ? 'Senha incorreta.' : 'E-mail não encontrado.'), 'error');
+    } finally {
+        loginBtn.disabled = false;
+        loginBtn.innerHTML = 'Entrar';
     }
 });
 
 // Evento de logout
 logoutBtn.addEventListener('click', async () => {
+    logoutBtn.disabled = true;
+    logoutBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saindo...';
+
     try {
         await signOut(auth);
     } catch (error) {
         console.error('Erro ao fazer logout:', error);
+        mostrarNotificacao('Erro ao fazer logout: ' + error.message, 'error');
+    } finally {
+        logoutBtn.disabled = false;
+        logoutBtn.innerHTML = 'Sair';
     }
 });
 
@@ -66,6 +89,13 @@ function navegarPara(pagina) {
     }
 }
 
+// Função para obter o número da semana no ano
+function getWeekNumber(date) {
+    const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+    const pastDaysOfYear = (date - firstDayOfYear) / 86400000;
+    return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+}
+
 // Atualizar dashboard
 function atualizarDashboard() {
     const totalAlunos = alunos.length;
@@ -76,9 +106,33 @@ function atualizarDashboard() {
         .reduce((sum, c) => sum + c.total, 0)
         .toFixed(2);
 
+    // Calcular mensagens recentes (para a semana atual)
+    const hojeDate = new Date();
+    const anoAtual = hojeDate.getFullYear();
+    const semanaAtual = getWeekNumber(hojeDate);
+    const dataInicio = new Date(anoAtual, 0, 1 + (semanaAtual - 1) * 7);
+    dataInicio.setDate(dataInicio.getDate() - dataInicio.getDay() + 1);
+    const dataFim = new Date(dataInicio);
+    dataFim.setDate(dataFim.getDate() + 6);
+
+    const mensagensRecentes = alunos.reduce((count, aluno, index) => {
+        const consumosAluno = consumos.filter(c => {
+            const dataConsumo = new Date(c.data);
+            return dataConsumo >= dataInicio && dataConsumo <= dataFim && c.alunoIndex === index;
+        });
+        return consumosAluno.length > 0 ? count + 1 : count; // Conta 1 mensagem por aluno com consumos na semana
+    }, 0);
+
+    // Calcular ganhos totais
+    const ganhosTotais = consumos
+        .reduce((sum, c) => sum + c.total, 0)
+        .toFixed(2);
+
     document.getElementById('total-alunos').textContent = `${totalAlunos} cadastrados`;
     document.getElementById('total-produtos').textContent = `${totalProdutos} cadastrados`;
     document.getElementById('vendas-hoje').textContent = `R$ ${vendasHoje.replace('.', ',')}`;
+    document.getElementById('total-mensagens').textContent = `${mensagensRecentes} mensagens`;
+    document.getElementById('ganhos-totais').textContent = `R$ ${ganhosTotais.replace('.', ',')}`;
 }
 
 // Gerenciar alunos
@@ -116,9 +170,13 @@ async function salvarAluno(event) {
     const pix = document.getElementById('pix-aluno').value.trim();
 
     if (!nome || !serie || !responsavel || !contato) {
-        alert('Preencha todos os campos obrigatórios.');
+        mostrarNotificacao('Preencha todos os campos obrigatórios.', 'error');
         return;
     }
+
+    const btn = event.target.querySelector('.btn-primary');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
 
     const { collection, addDoc } = window.firestoreModules;
     const db = window.db;
@@ -129,10 +187,13 @@ async function salvarAluno(event) {
         const docRef = await addDoc(alunosCollection, aluno);
         console.log('Aluno salvo com sucesso:', aluno, 'ID:', docRef.id);
         document.getElementById('aluno-form').reset();
-        alert('Aluno cadastrado com sucesso!');
+        mostrarNotificacao('Aluno cadastrado com sucesso!');
     } catch (error) {
         console.error('Erro ao salvar aluno:', error);
-        alert('Erro ao salvar aluno: ' + error.message);
+        mostrarNotificacao('Erro ao salvar aluno: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Salvar';
     }
 }
 
@@ -147,12 +208,19 @@ async function editarAluno(id, index) {
     const { doc, deleteDoc } = window.firestoreModules;
     const db = window.db;
 
+    const btn = document.querySelector('#aluno-form .btn-primary');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Editando...';
+
     try {
         await deleteDoc(doc(db, 'alunos', id));
         console.log('Aluno removido para edição:', id);
     } catch (error) {
         console.error('Erro ao remover aluno para edição:', error);
-        alert('Erro ao editar aluno. Tente novamente.');
+        mostrarNotificacao('Erro ao editar aluno. Tente novamente.', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Salvar';
     }
 }
 
@@ -162,14 +230,22 @@ async function excluirAluno(id, index) {
     const { doc, deleteDoc } = window.firestoreModules;
     const db = window.db;
 
+    const btn = document.querySelector('#tabela-alunos .acao-btn.excluir');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
     try {
         await deleteDoc(doc(db, 'alunos', id));
         console.log('Aluno excluído do Firestore:', id);
         atualizarDashboard();
         atualizarSelectAlunos();
+        mostrarNotificacao('Aluno excluído com sucesso!');
     } catch (error) {
         console.error('Erro ao excluir aluno:', error);
-        alert('Erro ao excluir aluno: ' + error.message);
+        mostrarNotificacao('Erro ao excluir aluno: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-trash"></i>';
     }
 }
 
@@ -209,9 +285,13 @@ async function salvarProduto(event) {
     const imagem = document.getElementById('imagem-produto').value.trim();
 
     if (!nome || isNaN(preco) || preco <= 0) {
-        alert('Preencha todos os campos obrigatórios com valores válidos.');
+        mostrarNotificacao('Preencha todos os campos obrigatórios com valores válidos.', 'error');
         return;
     }
+
+    const btn = event.target.querySelector('.btn-primary');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
 
     const { collection, addDoc } = window.firestoreModules;
     const db = window.db;
@@ -222,10 +302,13 @@ async function salvarProduto(event) {
         const docRef = await addDoc(produtosCollection, produto);
         console.log('Produto salvo no Firestore:', produto, 'ID:', docRef.id);
         document.getElementById('produto-form').reset();
-        alert('Produto cadastrado com sucesso!');
+        mostrarNotificacao('Produto cadastrado com sucesso!');
     } catch (error) {
         console.error('Erro ao salvar produto:', error);
-        alert('Erro ao salvar produto: ' + error.message);
+        mostrarNotificacao('Erro ao salvar produto: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Salvar';
     }
 }
 
@@ -238,12 +321,19 @@ async function editarProduto(id, index) {
     const { doc, deleteDoc } = window.firestoreModules;
     const db = window.db;
 
+    const btn = document.querySelector('#produto-form .btn-primary');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Editando...';
+
     try {
         await deleteDoc(doc(db, 'produtos', id));
         console.log('Produto removido para edição:', id);
     } catch (error) {
         console.error('Erro ao remover produto para edição:', error);
-        alert('Erro ao editar produto. Tente novamente.');
+        mostrarNotificacao('Erro ao editar produto. Tente novamente.', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Salvar';
     }
 }
 
@@ -253,14 +343,22 @@ async function excluirProduto(id, index) {
     const { doc, deleteDoc } = window.firestoreModules;
     const db = window.db;
 
+    const btn = document.querySelector('#lista-produtos .acao-btn.excluir');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
     try {
         await deleteDoc(doc(db, 'produtos', id));
         console.log('Produto excluído do Firestore:', id);
         atualizarDashboard();
         atualizarProdutosConsumo();
+        mostrarNotificacao('Produto excluído com sucesso!');
     } catch (error) {
         console.error('Erro ao excluir produto:', error);
-        alert('Erro ao excluir produto: ' + error.message);
+        mostrarNotificacao('Erro ao excluir produto: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-trash"></i>';
     }
 }
 
@@ -357,15 +455,19 @@ async function registrarConsumo(event) {
     const data = document.getElementById('data-consumo').value;
 
     if (!alunoIndex || !data || selectedItems.length === 0) {
-        alert('Preencha todos os campos e selecione pelo menos um produto.');
+        mostrarNotificacao('Preencha todos os campos e selecione pelo menos um produto.', 'error');
         return;
     }
 
     const alunoSelecionado = alunos[parseInt(alunoIndex)];
     if (!alunoSelecionado) {
-        alert('Aluno inválido. Por favor, selecione um aluno válido.');
+        mostrarNotificacao('Aluno inválido. Por favor, selecione um aluno válido.', 'error');
         return;
     }
+
+    const btn = event.target.querySelector('.btn-primary');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
 
     const { collection, addDoc } = window.firestoreModules;
     const db = window.db;
@@ -385,10 +487,13 @@ async function registrarConsumo(event) {
         selectedItems = [];
         document.querySelectorAll('.produto-selecao').forEach(el => el.classList.remove('selecionado'));
         atualizarResumoConsumo();
-        alert('Consumo registrado com sucesso!');
+        mostrarNotificacao('Consumo registrado com sucesso!');
     } catch (error) {
         console.error('Erro ao registrar consumo:', error);
-        alert('Erro ao registrar consumo: ' + error.message);
+        mostrarNotificacao('Erro ao registrar consumo: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Registrar Consumo';
     }
 }
 
@@ -422,13 +527,21 @@ async function excluirConsumo(id, index) {
     const { doc, deleteDoc } = window.firestoreModules;
     const db = window.db;
 
+    const btn = document.querySelector('#tabela-consumos .acao-btn.excluir');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
     try {
         await deleteDoc(doc(db, 'consumos', id));
         console.log('Consumo excluído do Firestore:', id);
         atualizarDashboard();
+        mostrarNotificacao('Consumo excluído com sucesso!');
     } catch (error) {
         console.error('Erro ao excluir consumo:', error);
-        alert('Erro ao excluir consumo: ' + error.message);
+        mostrarNotificacao('Erro ao excluir consumo: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-trash"></i>';
     }
 }
 
@@ -441,6 +554,10 @@ async function gerarRelatorio() {
     dataInicio.setDate(dataInicio.getDate() - dataInicio.getDay() + 1);
     const dataFim = new Date(dataInicio);
     dataFim.setDate(dataFim.getDate() + 6);
+
+    const btn = document.getElementById('gerar-relatorio');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
 
     const { collection, getDocs, query, where } = window.firestoreModules;
     const db = window.db;
@@ -496,13 +613,21 @@ async function gerarRelatorio() {
         });
 
         document.getElementById('resultado-relatorio').classList.add('ativo');
+        mostrarNotificacao('Relatório gerado com sucesso!');
     } catch (error) {
         console.error('Erro ao gerar relatório:', error);
-        alert('Erro ao gerar relatório: ' + error.message);
+        mostrarNotificacao('Erro ao gerar relatório: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Gerar Relatório';
     }
 }
 
 function exportarRelatorio() {
+    const btn = document.getElementById('exportar-relatorio');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exportando...';
+
     const tbody = document.querySelector('#tabela-relatorio tbody');
     let csv = 'Aluno,Série,Itens Consumidos,Total\n';
 
@@ -522,6 +647,10 @@ function exportarRelatorio() {
     link.href = URL.createObjectURL(blob);
     link.download = 'relatorio_cantina.csv';
     link.click();
+
+    mostrarNotificacao('Relatório exportado com sucesso!');
+    btn.disabled = false;
+    btn.innerHTML = 'Exportar CSV';
 }
 
 // Mensagens WhatsApp
@@ -532,6 +661,10 @@ async function gerarMensagens() {
     dataInicio.setDate(dataInicio.getDate() - dataInicio.getDay() + 1);
     const dataFim = new Date(dataInicio);
     dataFim.setDate(dataFim.getDate() + 6);
+
+    const btn = document.getElementById('gerar-mensagens');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
 
     const { collection, getDocs, query, where } = window.firestoreModules;
     const db = window.db;
@@ -591,22 +724,178 @@ async function gerarMensagens() {
             `;
             container.appendChild(div);
         });
+        mostrarNotificacao('Mensagens geradas com sucesso!');
     } catch (error) {
         console.error('Erro ao gerar mensagens:', error);
-        alert('Erro ao gerar mensagens: ' + error.message);
+        mostrarNotificacao('Erro ao gerar mensagens: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Gerar Mensagens';
     }
 }
 
 function copiarMensagem(button) {
     const texto = button.parentElement.parentElement.querySelector('.mensagem-texto').textContent;
-    navigator.clipboard.writeText(texto);
-    alert('Mensagem copiada para a área de transferência!');
+    navigator.clipboard.writeText(texto).then(() => {
+        mostrarNotificacao('Mensagem copiada para a área de transferência!');
+    }).catch(err => {
+        console.error('Erro ao copiar:', err);
+        mostrarNotificacao('Erro ao copiar mensagem.', 'error');
+    });
 }
 
 function enviarWhatsApp(contato, mensagem) {
     const numero = contato.replace(/\D/g, '');
     const url = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
     window.open(url, '_blank');
+}
+
+// Ganhos Semanais e Mensais
+async function gerarGanhos() {
+    const ano = document.getElementById('ano-ganhos').value;
+    if (!ano) {
+        mostrarNotificacao('Por favor, selecione um ano.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('gerar-ganhos');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
+
+    const { collection, getDocs, query, where } = window.firestoreModules;
+    const db = window.db;
+
+    try {
+        const consumosCollection = collection(db, 'consumos');
+        const q = query(
+            consumosCollection,
+            where('data', '>=', `${ano}-01-01`),
+            where('data', '<=', `${ano}-12-31`)
+        );
+        const querySnapshot = await getDocs(q);
+        const consumosFiltrados = [];
+        querySnapshot.forEach(doc => {
+            consumosFiltrados.push({ id: doc.id, ...doc.data() });
+        });
+
+        // Agrupar por semana
+        const ganhosSemanais = {};
+        consumosFiltrados.forEach(consumo => {
+            const data = new Date(consumo.data);
+            const ano = data.getFullYear();
+            const semanaNum = getWeekNumber(data);
+            const chave = `${ano}-W${semanaNum.toString().padStart(2, '0')}`;
+            if (!ganhosSemanais[chave]) {
+                const dataInicio = new Date(ano, 0, 1 + (semanaNum - 1) * 7);
+                dataInicio.setDate(dataInicio.getDate() - dataInicio.getDay() + 1);
+                const dataFim = new Date(dataInicio);
+                dataFim.setDate(dataFim.getDate() + 6);
+                ganhosSemanais[chave] = {
+                    semana: semanaNum,
+                    periodo: `${dataInicio.toLocaleDateString('pt-BR')} - ${dataFim.toLocaleDateString('pt-BR')}`,
+                    total: 0
+                };
+            }
+            ganhosSemanais[chave].total += consumo.total;
+        });
+
+        // Agrupar por mês
+        const ganhosMensais = {};
+        consumosFiltrados.forEach(consumo => {
+            const data = new Date(consumo.data);
+            const mes = data.getMonth() + 1;
+            const chave = `${data.getFullYear()}-${mes.toString().padStart(2, '0')}`;
+            const nomeMes = data.toLocaleString('pt-BR', { month: 'long' }).charAt(0).toUpperCase() + data.toLocaleString('pt-BR', { month: 'long' }).slice(1);
+            if (!ganhosMensais[chave]) {
+                ganhosMensais[chave] = {
+                    mes: nomeMes,
+                    total: 0
+                };
+            }
+            ganhosMensais[chave].total += consumo.total;
+        });
+
+        // Atualizar tabela de ganhos semanais
+        const tbodySemanais = document.querySelector('#tabela-ganhos-semanais tbody');
+        tbodySemanais.innerHTML = '';
+        Object.keys(ganhosSemanais).sort().forEach(chave => {
+            const ganho = ganhosSemanais[chave];
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>Semana ${ganho.semana}</td>
+                <td>${ganho.periodo}</td>
+                <td>R$ ${ganho.total.toFixed(2).replace('.', ',')}</td>
+            `;
+            tbodySemanais.appendChild(tr);
+        });
+
+        // Atualizar tabela de ganhos mensais
+        const tbodyMensais = document.querySelector('#tabela-ganhos-mensais tbody');
+        tbodyMensais.innerHTML = '';
+        Object.keys(ganhosMensais).sort().forEach(chave => {
+            const ganho = ganhosMensais[chave];
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${ganho.mes}</td>
+                <td>R$ ${ganho.total.toFixed(2).replace('.', ',')}</td>
+            `;
+            tbodyMensais.appendChild(tr);
+        });
+
+        document.getElementById('resultado-ganhos').classList.add('ativo');
+        mostrarNotificacao('Resumo de ganhos gerado com sucesso!');
+    } catch (error) {
+        console.error('Erro ao gerar resumo de ganhos:', error);
+        mostrarNotificacao('Erro ao gerar resumo de ganhos: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Gerar Resumo';
+    }
+}
+
+function exportarGanhos() {
+    const btn = document.getElementById('exportar-ganhos');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exportando...';
+
+    let csv = '';
+
+    // Exportar ganhos semanais
+    csv += 'Ganhos Semanais\n';
+    csv += 'Semana,Período,Total\n';
+    const tbodySemanais = document.querySelector('#tabela-ganhos-semanais tbody');
+    tbodySemanais.querySelectorAll('tr').forEach(tr => {
+        const cols = tr.querySelectorAll('td');
+        const row = [
+            cols[0].textContent,
+            cols[1].textContent,
+            cols[2].textContent
+        ].join(',');
+        csv += row + '\n';
+    });
+
+    // Exportar ganhos mensais
+    csv += '\nGanhos Mensais\n';
+    csv += 'Mês,Total\n';
+    const tbodyMensais = document.querySelector('#tabela-ganhos-mensais tbody');
+    tbodyMensais.querySelectorAll('tr').forEach(tr => {
+        const cols = tr.querySelectorAll('td');
+        const row = [
+            cols[0].textContent,
+            cols[1].textContent
+        ].join(',');
+        csv += row + '\n';
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'ganhos_cantina.csv';
+    link.click();
+
+    mostrarNotificacao('Ganhos exportados com sucesso!');
+    btn.disabled = false;
+    btn.innerHTML = 'Exportar CSV';
 }
 
 // Carregar dados do Firestore
@@ -629,7 +918,7 @@ function carregarDados() {
             atualizarDashboard();
         }, (error) => {
             console.error('Erro ao carregar alunos:', error);
-            alert('Erro ao carregar dados de alunos. Verifique a conexão.');
+            mostrarNotificacao('Erro ao carregar dados de alunos. Verifique a conexão.', 'error');
         });
 
         const produtosCollection = collection(db, 'produtos');
@@ -646,7 +935,7 @@ function carregarDados() {
             atualizarDashboard();
         }, (error) => {
             console.error('Erro ao carregar produtos:', error);
-            alert('Erro ao carregar dados de produtos. Verifique a conexão.');
+            mostrarNotificacao('Erro ao carregar dados de produtos. Verifique a conexão.', 'error');
         });
 
         const consumosCollection = collection(db, 'consumos');
@@ -662,11 +951,11 @@ function carregarDados() {
             atualizarDashboard();
         }, (error) => {
             console.error('Erro ao carregar consumos:', error);
-            alert('Erro ao carregar dados de consumos. Verifique a conexão.');
+            mostrarNotificacao('Erro ao carregar dados de consumos. Verifique a conexão.', 'error');
         });
     } catch (error) {
         console.error('Erro geral ao carregar dados:', error);
-        alert('Erro ao carregar dados: ' + error.message);
+        mostrarNotificacao('Erro ao carregar dados: ' + error.message, 'error');
     }
 }
 
@@ -684,6 +973,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    document.getElementById('menu-toggle').addEventListener('click', () => {
+        document.getElementById('main-menu').classList.toggle('active');
+    });
+
     document.getElementById('aluno-form').addEventListener('submit', salvarAluno);
     document.getElementById('produto-form').addEventListener('submit', salvarProduto);
     document.getElementById('consumo-form').addEventListener('submit', registrarConsumo);
@@ -694,6 +987,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('gerar-relatorio').addEventListener('click', gerarRelatorio);
     document.getElementById('exportar-relatorio').addEventListener('click', exportarRelatorio);
     document.getElementById('gerar-mensagens').addEventListener('click', gerarMensagens);
+
+    document.getElementById('gerar-ganhos').addEventListener('click', gerarGanhos);
+    document.getElementById('exportar-ganhos').addEventListener('click', exportarGanhos);
 
     if (window.db) {
         carregarDados();
