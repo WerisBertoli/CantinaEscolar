@@ -71,6 +71,8 @@ let alunos = [];
 let produtos = [];
 let consumos = [];
 let selectedItems = [];
+let semanaAtual = getWeekNumber(new Date()).toString().padStart(2, '0');
+let anoAtual = new Date().getFullYear();
 
 // Função para navegar entre páginas
 function navegarPara(pagina) {
@@ -96,6 +98,15 @@ function getWeekNumber(date) {
     return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
 }
 
+// Função para obter o período da semana
+function getPeriodoSemana(ano, semana) {
+    const dataInicio = new Date(ano, 0, 1 + (semana - 1) * 7);
+    dataInicio.setDate(dataInicio.getDate() - dataInicio.getDay() + 1);
+    const dataFim = new Date(dataInicio);
+    dataFim.setDate(dataFim.getDate() + 6);
+    return `${dataInicio.toLocaleDateString('pt-BR')} - ${dataFim.toLocaleDateString('pt-BR')}`;
+}
+
 // Atualizar dashboard
 function atualizarDashboard() {
     const totalAlunos = alunos.length;
@@ -106,10 +117,6 @@ function atualizarDashboard() {
         .reduce((sum, c) => sum + c.total, 0)
         .toFixed(2);
 
-    // Calcular mensagens recentes (para a semana atual)
-    const hojeDate = new Date();
-    const anoAtual = hojeDate.getFullYear();
-    const semanaAtual = getWeekNumber(hojeDate);
     const dataInicio = new Date(anoAtual, 0, 1 + (semanaAtual - 1) * 7);
     dataInicio.setDate(dataInicio.getDate() - dataInicio.getDay() + 1);
     const dataFim = new Date(dataInicio);
@@ -120,10 +127,9 @@ function atualizarDashboard() {
             const dataConsumo = new Date(c.data);
             return dataConsumo >= dataInicio && dataConsumo <= dataFim && c.alunoIndex === index;
         });
-        return consumosAluno.length > 0 ? count + 1 : count; // Conta 1 mensagem por aluno com consumos na semana
+        return consumosAluno.length > 0 ? count + 1 : count;
     }, 0);
 
-    // Calcular ganhos totais
     const ganhosTotais = consumos
         .reduce((sum, c) => sum + c.total, 0)
         .toFixed(2);
@@ -372,7 +378,7 @@ function atualizarSelectAlunos() {
     alunos.forEach((aluno, index) => {
         const option = document.createElement('option');
         option.value = index;
-        option.textContent = `${aluno.nome} (${aluno.serie})`; // Exibe nome e turma
+        option.textContent = `${aluno.nome} (${aluno.serie})`;
         select.appendChild(option);
 
         const optionRelatorio = document.createElement('option');
@@ -474,11 +480,12 @@ async function registrarConsumo(event) {
 
     try {
         const consumo = {
-            alunoIndex: parseInt(alunoIndex), // Garantir que alunoIndex seja salvo como número
-            alunoNome: alunoSelecionado.nome, // Salvar o nome do aluno para depuração
-            data, // data já vem no formato YYYY-MM-DD do input
+            alunoIndex: parseInt(alunoIndex),
+            alunoNome: alunoSelecionado.nome,
+            data,
             itens: selectedItems.map(item => ({ nome: item.nome, preco: item.preco, quantidade: item.quantidade })),
-            total: selectedItems.reduce((sum, item) => sum + item.preco * item.quantidade, 0)
+            total: selectedItems.reduce((sum, item) => sum + item.preco * item.quantidade, 0),
+            pago: false
         };
         const consumosCollection = collection(db, 'consumos');
         const docRef = await addDoc(consumosCollection, consumo);
@@ -487,6 +494,7 @@ async function registrarConsumo(event) {
         selectedItems = [];
         document.querySelectorAll('.produto-selecao').forEach(el => el.classList.remove('selecionado'));
         atualizarResumoConsumo();
+        carregarConsumos();
         mostrarNotificacao('Consumo registrado com sucesso!');
     } catch (error) {
         console.error('Erro ao registrar consumo:', error);
@@ -501,16 +509,29 @@ function atualizarTabelaConsumos() {
     const tbody = document.querySelector('#tabela-consumos tbody');
     tbody.innerHTML = '';
 
-    const consumosOrdenados = [...consumos].sort((a, b) => new Date(a.data) - new Date(b.data));
+    const dataInicio = new Date(anoAtual, 0, 1 + (semanaAtual - 1) * 7);
+    dataInicio.setDate(dataInicio.getDate() - dataInicio.getDay() + 1);
+    const dataFim = new Date(dataInicio);
+    dataFim.setDate(dataFim.getDate() + 6);
 
-    consumosOrdenados.forEach((consumo, index) => {
-        const aluno = alunos[consumo.alunoIndex];
+    const consumosFiltrados = consumos.filter(c => {
+        const dataConsumo = new Date(c.data);
+        return dataConsumo >= dataInicio && dataConsumo <= dataFim;
+    }).sort((a, b) => new Date(b.data) - new Date(a.data));
+
+    if (consumosFiltrados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5">Nenhum consumo registrado nesta semana.</td></tr>';
+        return;
+    }
+
+    consumosFiltrados.forEach((consumo, index) => {
+        const aluno = alunos[consumo.alunoIndex] || { nome: 'Desconhecido' };
         const itens = consumo.itens.map(item => `${item.nome} (x${item.quantidade})`).join(', ');
-        const dataFormatada = consumo.data.split('T')[0].split('-').reverse().join('/'); // Formato DD/MM/YYYY
+        const dataFormatada = consumo.data.split('T')[0].split('-').reverse().join('/');
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${dataFormatada}</td>
-            <td>${aluno ? aluno.nome : 'Desconhecido'}</td>
+            <td>${aluno.nome}</td>
             <td>${itens}</td>
             <td>R$ ${consumo.total.toFixed(2).replace('.', ',')}</td>
             <td>
@@ -534,6 +555,7 @@ async function excluirConsumo(id, index) {
     try {
         await deleteDoc(doc(db, 'consumos', id));
         console.log('Consumo excluído do Firestore:', id);
+        carregarConsumos();
         atualizarDashboard();
         mostrarNotificacao('Consumo excluído com sucesso!');
     } catch (error) {
@@ -575,39 +597,39 @@ async function gerarRelatorio() {
         const querySnapshot = await getDocs(q);
         const consumosFiltrados = [];
         querySnapshot.forEach(doc => {
-            consumosFiltrados.push({ id: doc.id, ...doc.data() });
+            const consumo = doc.data();
+            consumo.id = doc.id;
+            // Garantir que o campo 'pago' exista, default para false se não estiver definido
+            if (typeof consumo.pago === 'undefined') {
+                consumo.pago = false;
+            }
+            consumosFiltrados.push(consumo);
         });
 
         const tbody = document.querySelector('#tabela-relatorio tbody');
         tbody.innerHTML = '';
 
-        const resumo = {};
-        consumosFiltrados.forEach(consumo => {
-            const aluno = alunos[consumo.alunoIndex];
-            if (!aluno) return;
+        // Ordenar os consumos por data (do mais recente para o mais antigo)
+        consumosFiltrados.sort((a, b) => new Date(b.data) - new Date(a.data));
 
-            if (!resumo[consumo.alunoIndex]) {
-                resumo[consumo.alunoIndex] = {
-                    nome: aluno.nome,
-                    serie: aluno.serie,
-                    itens: [],
-                    total: 0
-                };
-            }
-
-            consumo.itens.forEach(item => {
-                resumo[consumo.alunoIndex].itens.push(`${item.nome} (x${item.quantidade})`);
-                resumo[consumo.alunoIndex].total += item.preco * item.quantidade;
-            });
-        });
-
-        Object.values(resumo).forEach(aluno => {
+        // Exibir cada consumo como uma linha separada
+        consumosFiltrados.forEach((consumo, index) => {
+            const aluno = alunos[consumo.alunoIndex] || { nome: 'Desconhecido', serie: 'N/A' };
+            const itens = consumo.itens.map(item => `${item.nome} (x${item.quantidade})`).join(', ');
+            const dataFormatada = consumo.data.split('T')[0].split('-').reverse().join('/');
+            const statusClass = consumo.pago ? 'status-pago' : 'status-aberto';
             const tr = document.createElement('tr');
             tr.innerHTML = `
+                <td>${dataFormatada}</td>
+                <td><span class="status-bolinha ${statusClass}"></span>${consumo.pago ? 'Pago' : 'Aberto'}</td>
                 <td>${aluno.nome}</td>
                 <td>${aluno.serie}</td>
-                <td>${aluno.itens.join(', ')}</td>
-                <td>R$ ${aluno.total.toFixed(2).replace('.', ',')}</td>
+                <td>${itens}</td>
+                <td>R$ ${consumo.total.toFixed(2).replace('.', ',')}</td>
+                <td>
+                    <button class="acao-btn editar" onclick="togglePagamento('${consumo.id}', ${index})"><i class="fas ${consumo.pago ? 'fa-lock' : 'fa-unlock'}"></i></button>
+                    <button class="acao-btn excluir" onclick="excluirConsumoRelatorio('${consumo.id}', ${index})"><i class="fas fa-trash"></i></button>
+                </td>
             `;
             tbody.appendChild(tr);
         });
@@ -623,34 +645,60 @@ async function gerarRelatorio() {
     }
 }
 
-function exportarRelatorio() {
-    const btn = document.getElementById('exportar-relatorio');
+async function togglePagamento(id, index) {
+    const { doc, updateDoc } = window.firestoreModules;
+    const db = window.db;
+
+    // Seleciona o botão de edição dentro da linha correspondente
+    const row = document.querySelector(`#tabela-relatorio tbody tr:nth-child(${index + 1})`);
+    const btn = row.querySelector('.acao-btn.editar');
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exportando...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-    const tbody = document.querySelector('#tabela-relatorio tbody');
-    let csv = 'Aluno,Série,Itens Consumidos,Total\n';
+    try {
+        const consumoRef = doc(db, 'consumos', id);
+        const consumo = consumos.find(c => c.id === id);
+        const novoStatus = !consumo.pago;
+        await updateDoc(consumoRef, { pago: novoStatus });
+        console.log(`Status de pagamento atualizado para ${novoStatus} - ID: ${id}`);
+        consumo.pago = novoStatus; // Atualiza o status localmente
+        await gerarRelatorio(); // Re-gerar o relatório para refletir a mudança
+        mostrarNotificacao(`Status de pagamento alterado para ${novoStatus ? 'pago' : 'aberto'} com sucesso!`);
+    } catch (error) {
+        console.error('Erro ao atualizar pagamento:', error);
+        mostrarNotificacao('Erro ao atualizar pagamento: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        // Atualiza o ícone com base no novo status
+        const consumo = consumos.find(c => c.id === id);
+        btn.innerHTML = `<i class="fas ${consumo.pago ? 'fa-lock' : 'fa-unlock'}"></i>`;
+    }
+}
 
-    tbody.querySelectorAll('tr').forEach(tr => {
-        const cols = tr.querySelectorAll('td');
-        const row = [
-            cols[0].textContent,
-            cols[1].textContent,
-            `"${cols[2].textContent}"`,
-            cols[3].textContent
-        ].join(',');
-        csv += row + '\n';
-    });
+async function excluirConsumoRelatorio(id, index) {
+    if (!confirm('Tem certeza que deseja excluir este consumo?')) return;
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'relatorio_cantina.csv';
-    link.click();
+    const { doc, deleteDoc } = window.firestoreModules;
+    const db = window.db;
 
-    mostrarNotificacao('Relatório exportado com sucesso!');
-    btn.disabled = false;
-    btn.innerHTML = 'Exportar CSV';
+    const btn = document.querySelector(`#tabela-relatorio .acao-btn.excluir:nth-child(${index + 1})`);
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    try {
+        await deleteDoc(doc(db, 'consumos', id));
+        console.log('Consumo excluído do Firestore:', id);
+        carregarConsumos();
+        gerarRelatorio(); // Re-gerar o relatório para refletir a exclusão
+        atualizarDashboard();
+        mostrarNotificacao('Consumo excluído com sucesso!');
+    } catch (error) {
+        console.error('Erro ao excluir consumo:', error);
+        mostrarNotificacao('Erro ao excluir consumo: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-trash"></i>';
+    }
 }
 
 // Mensagens WhatsApp
@@ -679,25 +727,30 @@ async function gerarMensagens() {
         const querySnapshot = await getDocs(q);
         const consumosFiltrados = [];
         querySnapshot.forEach(doc => {
-            consumosFiltrados.push({ id: doc.id, ...doc.data() });
+            const consumo = doc.data();
+            consumo.id = doc.id;
+            if (typeof consumo.pago === 'undefined') {
+                consumo.pago = false;
+            }
+            consumosFiltrados.push(consumo);
         });
 
         const container = document.getElementById('lista-mensagens');
         container.innerHTML = '';
 
         alunos.forEach((aluno, index) => {
-            const consumosAluno = consumosFiltrados.filter(c => c.alunoIndex === index);
+            const consumosAluno = consumosFiltrados.filter(c => c.alunoIndex === index && !c.pago);
             if (consumosAluno.length === 0) return;
 
             const consumosPorDia = {};
             let total = 0;
             consumosAluno.forEach(c => {
-                const dataFormatada = c.data.split('T')[0].split('-').reverse().join('/'); // Formato DD/MM/YYYY
+                const dataFormatada = c.data.split('T')[0].split('-').reverse().join('/');
                 if (!consumosPorDia[dataFormatada]) {
                     consumosPorDia[dataFormatada] = [];
                 }
                 c.itens.forEach(item => {
-                    consumosPorDia[dataFormatada].push(`${item.nome} (x${item.quantidade})`);
+                    consumosPorDia[dataFormatada].push(`${item.quantidade}x ${item.nome}`);
                     total += item.preco * item.quantidade;
                 });
             });
@@ -707,19 +760,19 @@ async function gerarMensagens() {
                 itensTexto += `${data}:\n- ${itens.join('\n- ')}\n\n`;
             }
 
-            const mensagem = `Olá, ${aluno.responsavel}! Aqui está o resumo do consumo de ${aluno.nome} na cantina do Erlach na semana de ${dataInicio.toLocaleDateString('pt-BR')} a ${dataFim.toLocaleDateString('pt-BR')}:\n\n${itensTexto}Total: R$ ${total.toFixed(2).replace('.', ',')}\n\n${aluno.pix ? `Chave PIX para pagamento: ${aluno.pix}` : 'Por favor, entre em contato para detalhes de pagamento.'}`;
+            const mensagem = `Olá, ${aluno.responsavel}! O aluno ${aluno.nome} tem um saldo de R$ ${total.toFixed(2).replace('.', ',')} referente aos itens consumidos entre ${dataInicio.toLocaleDateString('pt-BR')} e ${dataFim.toLocaleDateString('pt-BR')}:\n\n${itensTexto}Por favor, realize o pagamento. Chave PIX: ${aluno.pix || 'Não informada'}. Obrigado!`;
 
             const div = document.createElement('div');
             div.className = 'mensagem-card';
             div.innerHTML = `
                 <div class="mensagem-header">
-                    <span class="mensagem-nome">${aluno.nome} (${aluno.responsavel})</span>
+                    <span class="mensagem-nome">${aluno.nome}</span>
                     <span class="mensagem-contato">${aluno.contato}</span>
                 </div>
                 <div class="mensagem-texto">${mensagem}</div>
                 <div class="mensagem-acoes">
-                    <button class="btn-copiar" onclick="copiarMensagem(this)"><i class="fas fa-copy"></i> Copiar</button>
-                    <button class="btn-whatsapp" onclick="enviarWhatsApp('${aluno.contato}', \`${mensagem}\`)"><i class="fab fa-whatsapp"></i> Enviar</button>
+                    <button class="btn-copiar" onclick="copiarMensagem(this, '${mensagem}')"><i class="fas fa-copy"></i> Copiar</button>
+                    <button class="btn-whatsapp" onclick="enviarWhatsApp('${aluno.contato}', '${encodeURIComponent(mensagem)}')"><i class="fab fa-whatsapp"></i> Enviar</button>
                 </div>
             `;
             container.appendChild(div);
@@ -734,29 +787,22 @@ async function gerarMensagens() {
     }
 }
 
-function copiarMensagem(button) {
-    const texto = button.parentElement.parentElement.querySelector('.mensagem-texto').textContent;
+function copiarMensagem(button, texto) {
     navigator.clipboard.writeText(texto).then(() => {
+        button.textContent = 'Copiado!';
+        setTimeout(() => (button.textContent = 'Copiar'), 2000);
         mostrarNotificacao('Mensagem copiada para a área de transferência!');
-    }).catch(err => {
-        console.error('Erro ao copiar:', err);
-        mostrarNotificacao('Erro ao copiar mensagem.', 'error');
     });
 }
 
 function enviarWhatsApp(contato, mensagem) {
-    const numero = contato.replace(/\D/g, '');
-    const url = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
+    const url = `https://wa.me/${contato.replace(/\D/g, '')}?text=${mensagem}`;
     window.open(url, '_blank');
 }
 
 // Ganhos Semanais e Mensais
 async function gerarGanhos() {
     const ano = document.getElementById('ano-ganhos').value;
-    if (!ano) {
-        mostrarNotificacao('Por favor, selecione um ano.', 'error');
-        return;
-    }
 
     const btn = document.getElementById('gerar-ganhos');
     btn.disabled = true;
@@ -778,11 +824,9 @@ async function gerarGanhos() {
             consumosFiltrados.push({ id: doc.id, ...doc.data() });
         });
 
-        // Agrupar por semana
         const ganhosSemanais = {};
         consumosFiltrados.forEach(consumo => {
             const data = new Date(consumo.data);
-            const ano = data.getFullYear();
             const semanaNum = getWeekNumber(data);
             const chave = `${ano}-W${semanaNum.toString().padStart(2, '0')}`;
             if (!ganhosSemanais[chave]) {
@@ -799,7 +843,6 @@ async function gerarGanhos() {
             ganhosSemanais[chave].total += consumo.total;
         });
 
-        // Agrupar por mês
         const ganhosMensais = {};
         consumosFiltrados.forEach(consumo => {
             const data = new Date(consumo.data);
@@ -815,23 +858,23 @@ async function gerarGanhos() {
             ganhosMensais[chave].total += consumo.total;
         });
 
-        // Atualizar tabela de ganhos semanais
         const tbodySemanais = document.querySelector('#tabela-ganhos-semanais tbody');
+        const tbodyMensais = document.querySelector('#tabela-ganhos-mensais tbody');
         tbodySemanais.innerHTML = '';
+        tbodyMensais.innerHTML = '';
+        document.getElementById('resultado-ganhos').classList.add('ativo');
+
         Object.keys(ganhosSemanais).sort().forEach(chave => {
             const ganho = ganhosSemanais[chave];
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>Semana ${ganho.semana}</td>
+                <td>W${ganho.semana.toString().padStart(2, '0')}</td>
                 <td>${ganho.periodo}</td>
                 <td>R$ ${ganho.total.toFixed(2).replace('.', ',')}</td>
             `;
             tbodySemanais.appendChild(tr);
         });
 
-        // Atualizar tabela de ganhos mensais
-        const tbodyMensais = document.querySelector('#tabela-ganhos-mensais tbody');
-        tbodyMensais.innerHTML = '';
         Object.keys(ganhosMensais).sort().forEach(chave => {
             const ganho = ganhosMensais[chave];
             const tr = document.createElement('tr');
@@ -841,16 +884,45 @@ async function gerarGanhos() {
             `;
             tbodyMensais.appendChild(tr);
         });
-
-        document.getElementById('resultado-ganhos').classList.add('ativo');
-        mostrarNotificacao('Resumo de ganhos gerado com sucesso!');
     } catch (error) {
-        console.error('Erro ao gerar resumo de ganhos:', error);
-        mostrarNotificacao('Erro ao gerar resumo de ganhos: ' + error.message, 'error');
+        console.error('Erro ao gerar ganhos:', error);
+        mostrarNotificacao('Erro ao gerar ganhos: ' + error.message, 'error');
     } finally {
         btn.disabled = false;
         btn.innerHTML = 'Gerar Resumo';
     }
+}
+
+function exportarRelatorio() {
+    const btn = document.getElementById('exportar-relatorio');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exportando...';
+
+    const tbody = document.querySelector('#tabela-relatorio tbody');
+    let csv = 'Data,Status,Aluno,Série,Itens Consumidos,Total\n';
+
+    tbody.querySelectorAll('tr').forEach(tr => {
+        const cols = tr.querySelectorAll('td');
+        const row = [
+            cols[0].textContent,
+            cols[1].textContent.split('\n')[0].trim(),
+            cols[2].textContent,
+            cols[3].textContent,
+            `"${cols[4].textContent}"`,
+            cols[5].textContent
+        ].join(',');
+        csv += row + '\n';
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'relatorio_cantina.csv';
+    link.click();
+
+    mostrarNotificacao('Relatório exportado com sucesso!');
+    btn.disabled = false;
+    btn.innerHTML = 'Exportar CSV';
 }
 
 function exportarGanhos() {
@@ -858,11 +930,7 @@ function exportarGanhos() {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exportando...';
 
-    let csv = '';
-
-    // Exportar ganhos semanais
-    csv += 'Ganhos Semanais\n';
-    csv += 'Semana,Período,Total\n';
+    let csv = 'Ganhos Semanais\nSemana,Período,Total\n';
     const tbodySemanais = document.querySelector('#tabela-ganhos-semanais tbody');
     tbodySemanais.querySelectorAll('tr').forEach(tr => {
         const cols = tr.querySelectorAll('td');
@@ -874,9 +942,7 @@ function exportarGanhos() {
         csv += row + '\n';
     });
 
-    // Exportar ganhos mensais
-    csv += '\nGanhos Mensais\n';
-    csv += 'Mês,Total\n';
+    csv += '\nGanhos Mensais\nMês,Total\n';
     const tbodyMensais = document.querySelector('#tabela-ganhos-mensais tbody');
     tbodyMensais.querySelectorAll('tr').forEach(tr => {
         const cols = tr.querySelectorAll('td');
@@ -899,65 +965,90 @@ function exportarGanhos() {
 }
 
 // Carregar dados do Firestore
+function carregarConsumos() {
+    const { collection, onSnapshot } = window.firestoreModules;
+    const db = window.db;
+
+    const consumosCollection = collection(db, 'consumos');
+    onSnapshot(consumosCollection, (snapshot) => {
+        console.log('Carregando consumos...');
+        consumos = [];
+        snapshot.forEach((doc) => {
+            const consumo = doc.data();
+            consumo.id = doc.id;
+            if (typeof consumo.pago === 'undefined') {
+                consumo.pago = false;
+            }
+            consumos.push(consumo);
+        });
+        atualizarTabelaConsumos();
+        atualizarDashboard();
+    }, (error) => {
+        console.error('Erro ao carregar consumos:', error);
+        mostrarNotificacao('Erro ao carregar dados de consumos. Verifique a conexão.', 'error');
+    });
+}
+
 function carregarDados() {
     const { collection, onSnapshot } = window.firestoreModules;
     const db = window.db;
 
-    try {
-        const alunosCollection = collection(db, 'alunos');
-        onSnapshot(alunosCollection, (snapshot) => {
-            console.log('Carregando alunos...');
-            alunos = [];
-            snapshot.forEach((doc) => {
-                const aluno = doc.data();
-                aluno.id = doc.id;
-                alunos.push(aluno);
-            });
-            atualizarTabelaAlunos();
-            atualizarSelectAlunos();
-            atualizarDashboard();
-        }, (error) => {
-            console.error('Erro ao carregar alunos:', error);
-            mostrarNotificacao('Erro ao carregar dados de alunos. Verifique a conexão.', 'error');
+    const alunosCollection = collection(db, 'alunos');
+    onSnapshot(alunosCollection, (snapshot) => {
+        console.log('Carregando alunos...');
+        alunos = [];
+        snapshot.forEach((doc) => {
+            const aluno = doc.data();
+            aluno.id = doc.id;
+            alunos.push(aluno);
         });
+        atualizarTabelaAlunos();
+        atualizarSelectAlunos();
+        atualizarDashboard();
+    }, (error) => {
+        console.error('Erro ao carregar alunos:', error);
+        mostrarNotificacao('Erro ao carregar dados de alunos. Verifique a conexão.', 'error');
+    });
 
-        const produtosCollection = collection(db, 'produtos');
-        onSnapshot(produtosCollection, (snapshot) => {
-            console.log('Carregando produtos...');
-            produtos = [];
-            snapshot.forEach((doc) => {
-                const produto = doc.data();
-                produto.id = doc.id;
-                produtos.push(produto);
-            });
-            atualizarListaProdutos();
-            atualizarProdutosConsumo();
-            atualizarDashboard();
-        }, (error) => {
-            console.error('Erro ao carregar produtos:', error);
-            mostrarNotificacao('Erro ao carregar dados de produtos. Verifique a conexão.', 'error');
+    const produtosCollection = collection(db, 'produtos');
+    onSnapshot(produtosCollection, (snapshot) => {
+        console.log('Carregando produtos...');
+        produtos = [];
+        snapshot.forEach((doc) => {
+            const produto = doc.data();
+            produto.id = doc.id;
+            produtos.push(produto);
         });
+        atualizarListaProdutos();
+        atualizarProdutosConsumo();
+        atualizarDashboard();
+    }, (error) => {
+        console.error('Erro ao carregar produtos:', error);
+        mostrarNotificacao('Erro ao carregar dados de produtos. Verifique a conexão.', 'error');
+    });
 
-        const consumosCollection = collection(db, 'consumos');
-        onSnapshot(consumosCollection, (snapshot) => {
-            console.log('Carregando consumos...');
-            consumos = [];
-            snapshot.forEach((doc) => {
-                const consumo = doc.data();
-                consumo.id = doc.id;
-                consumos.push(consumo);
-            });
-            atualizarTabelaConsumos();
-            atualizarDashboard();
-        }, (error) => {
-            console.error('Erro ao carregar consumos:', error);
-            mostrarNotificacao('Erro ao carregar dados de consumos. Verifique a conexão.', 'error');
-        });
-    } catch (error) {
-        console.error('Erro geral ao carregar dados:', error);
-        mostrarNotificacao('Erro ao carregar dados: ' + error.message, 'error');
-    }
+    carregarConsumos();
 }
+
+// Navegação de semanas
+document.getElementById('prev-semana').addEventListener('click', () => {
+    semanaAtual = (semanaAtual > 1) ? semanaAtual - 1 : 52;
+    document.getElementById('seletor-semana').value = `${anoAtual}-W${semanaAtual}`;
+    atualizarTabelaConsumos();
+});
+
+document.getElementById('next-semana').addEventListener('click', () => {
+    semanaAtual = (semanaAtual < 52) ? parseInt(semanaAtual) + 1 : 1;
+    document.getElementById('seletor-semana').value = `${anoAtual}-W${semanaAtual}`;
+    atualizarTabelaConsumos();
+});
+
+document.getElementById('seletor-semana').addEventListener('change', (e) => {
+    const [ano, semana] = e.target.value.split('-W');
+    semanaAtual = semana;
+    anoAtual = ano;
+    atualizarTabelaConsumos();
+});
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
@@ -991,6 +1082,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('gerar-ganhos').addEventListener('click', gerarGanhos);
     document.getElementById('exportar-ganhos').addEventListener('click', exportarGanhos);
 
+    document.getElementById('seletor-semana').value = `${anoAtual}-W${semanaAtual}`;
     if (window.db) {
         carregarDados();
     } else {

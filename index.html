@@ -8,10 +8,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <!-- Área para notificações -->
     <div id="notification-area" aria-live="polite"></div>
 
-    <!-- Tela de Login -->
     <div id="login-page" class="login-container">
         <div class="login-box">
             <h2>Login - Cantina Erlach</h2>
@@ -32,7 +30,6 @@
         </div>
     </div>
 
-    <!-- Conteúdo principal da aplicação (oculto até o login) -->
     <div id="app-content" style="display: none;">
         <div class="container">
             <header>
@@ -53,7 +50,6 @@
             </header>
             
             <main>
-                <!-- Tela inicial -->
                 <section id="home" class="page active">
                     <div class="dashboard">
                         <h2>Dashboard</h2>
@@ -98,7 +94,6 @@
                     </div>
                 </section>
 
-                <!-- Cadastro de alunos -->
                 <section id="alunos" class="page">
                     <h2>Cadastro de Alunos</h2>
                     <div class="form-container">
@@ -168,7 +163,6 @@
                     </div>
                 </section>
 
-                <!-- Cadastro de produtos -->
                 <section id="produtos" class="page">
                     <h2>Cadastro de Produtos</h2>
                     <div class="form-container">
@@ -202,7 +196,6 @@
                     </div>
                 </section>
 
-                <!-- Registro de consumo -->
                 <section id="consumo" class="page">
                     <h2>Registro de Consumo</h2>
                     
@@ -246,6 +239,11 @@
 
                     <div class="historico-container">
                         <h3>Consumos Recentes</h3>
+                        <div class="nav-semana">
+                            <button id="prev-semana" class="btn-secondary">Semana Anterior</button>
+                            <input type="week" id="seletor-semana" required>
+                            <button id="next-semana" class="btn-secondary">Próxima Semana</button>
+                        </div>
                         <div class="table-container">
                             <table id="tabela-consumos">
                                 <thead>
@@ -265,7 +263,6 @@
                     </div>
                 </section>
 
-                <!-- Relatórios -->
                 <section id="relatorios" class="page">
                     <h2>Relatórios Semanais</h2>
                     
@@ -275,10 +272,10 @@
                             <input type="week" id="semana-relatorio" required>
                         </div>
                         <div class="form-group">
-                            <label for="aluno-relatorio">Aluno:</label>
+                            <label for="aluno-relatorio">Selecione o Aluno:</label>
                             <select id="aluno-relatorio">
                                 <option value="">Todos os alunos</option>
-                                <!-- Opções preenchidas via JavaScript -->
+                                <!-- Opções preenchidas via JavaScript com atualizarSelectAlunos() -->
                             </select>
                         </div>
                         <div class="buttons">
@@ -286,17 +283,20 @@
                             <button id="exportar-relatorio" class="btn-secondary">Exportar CSV</button>
                         </div>
                     </div>
-
+                
                     <div id="resultado-relatorio" class="relatorio-container">
                         <h3>Resumo Semanal</h3>
                         <div class="table-container">
                             <table id="tabela-relatorio">
                                 <thead>
                                     <tr>
+                                        <th>Data</th>
+                                        <th>Status</th>
                                         <th>Aluno</th>
                                         <th>Série</th>
                                         <th>Itens Consumidos</th>
                                         <th>Total</th>
+                                        <th>Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -307,7 +307,6 @@
                     </div>
                 </section>
 
-                <!-- Mensagens WhatsApp -->
                 <section id="mensagens" class="page">
                     <h2>Envio de Mensagens</h2>
                     
@@ -326,7 +325,6 @@
                     </div>
                 </section>
 
-                <!-- Aba Ganhos -->
                 <section id="ganhos" class="page">
                     <h2>Ganhos Semanais e Mensais</h2>
                     
@@ -388,7 +386,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, setDoc, deleteDoc, doc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, setDoc, deleteDoc, doc, getDocs, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     
         const firebaseConfig = {
@@ -409,7 +407,7 @@
         console.log("Auth:", auth);
     
         window.db = db;
-        window.firestoreModules = { collection, onSnapshot, addDoc, setDoc, deleteDoc, doc, getDocs, query, where };
+        window.firestoreModules = { collection, onSnapshot, addDoc, setDoc, deleteDoc, doc, getDocs, query, where, updateDoc };
         window.firebaseAuthModules = { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged };
     </script>
     <script defer src="src/main.js"></script>
