@@ -264,48 +264,48 @@
                 </section>
 
                 <section id="relatorios" class="page">
-                    <h2>Relatórios Semanais</h2>
-                    
-                    <div class="form-container">
-                        <div class="form-group required">
-                            <label for="semana-relatorio">Selecione a Semana:</label>
-                            <input type="week" id="semana-relatorio" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="aluno-relatorio">Selecione o Aluno:</label>
-                            <select id="aluno-relatorio">
-                                <option value="">Todos os alunos</option>
-                                <!-- Opções preenchidas via JavaScript com atualizarSelectAlunos() -->
-                            </select>
-                        </div>
-                        <div class="buttons">
-                            <button id="gerar-relatorio" class="btn-primary">Gerar Relatório</button>
-                            <button id="exportar-relatorio" class="btn-secondary">Exportar CSV</button>
-                        </div>
-                    </div>
-                
-                    <div id="resultado-relatorio" class="relatorio-container">
-                        <h3>Resumo Semanal</h3>
-                        <div class="table-container">
-                            <table id="tabela-relatorio">
-                                <thead>
-                                    <tr>
-                                        <th>Data</th>
-                                        <th>Status</th>
-                                        <th>Aluno</th>
-                                        <th>Série</th>
-                                        <th>Itens Consumidos</th>
-                                        <th>Total</th>
-                                        <th>Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <!-- Dados do relatório inseridos via JavaScript -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
+    <h2>Relatórios Semanais</h2>
+    
+    <div class="form-container">
+        <div class="form-group required">
+            <label for="semana-relatorio">Selecione a Semana:</label>
+            <input type="week" id="semana-relatorio" required>
+        </div>
+        <div class="form-group">
+            <label for="aluno-relatorio">Selecione o Aluno:</label>
+            <select id="aluno-relatorio">
+                <option value="">Todos os alunos</option>
+                <!-- Opções preenchidas via JavaScript com atualizarSelectAlunos() -->
+            </select>
+        </div>
+        <div class="buttons">
+            <button id="gerar-relatorio" class="btn-primary">Gerar Relatório</button>
+            <button id="exportar-relatorio" class="btn-secondary">Exportar CSV</button>
+        </div>
+    </div>
+
+    <div id="resultado-relatorio" class="relatorio-container">
+        <h3>Resumo Semanal</h3>
+        <div class="table-container">
+            <table id="tabela-relatorio">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Status</th>
+                        <th>Aluno</th>
+                        <th>Série</th>
+                        <th>Itens Consumidos</th>
+                        <th>Total</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Dados do relatório inseridos via JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
 
                 <section id="mensagens" class="page">
                     <h2>Envio de Mensagens</h2>

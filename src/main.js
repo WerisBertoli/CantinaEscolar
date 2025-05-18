@@ -510,7 +510,7 @@ function atualizarTabelaConsumos() {
     tbody.innerHTML = '';
 
     const dataInicio = new Date(anoAtual, 0, 1 + (semanaAtual - 1) * 7);
-    dataInicio.setDate(dataInicio.getDate() - dataInicio.getDay() + 1);
+    dataInicio.setDate(dataInicio.getDate() - dataInicio.getDay());
     const dataFim = new Date(dataInicio);
     dataFim.setDate(dataFim.getDate() + 6);
 
