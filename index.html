@@ -215,6 +215,10 @@
                             </div>
 
                             <h3>Selecione os Produtos</h3>
+                            <div class="search-container">
+                                <input type="text" id="buscar-produto-consumo" placeholder="Buscar produto...">
+                                <button class="btn-search"><i class="fas fa-search"></i></button>
+                            </div>
                             <div id="produtos-consumo" class="produtos-selecao">
                                 <!-- Produtos serão inseridos via JavaScript -->
                             </div>
@@ -264,48 +268,48 @@
                 </section>
 
                 <section id="relatorios" class="page">
-    <h2>Relatórios Semanais</h2>
-    
-    <div class="form-container">
-        <div class="form-group required">
-            <label for="semana-relatorio">Selecione a Semana:</label>
-            <input type="week" id="semana-relatorio" required>
-        </div>
-        <div class="form-group">
-            <label for="aluno-relatorio">Selecione o Aluno:</label>
-            <select id="aluno-relatorio">
-                <option value="">Todos os alunos</option>
-                <!-- Opções preenchidas via JavaScript com atualizarSelectAlunos() -->
-            </select>
-        </div>
-        <div class="buttons">
-            <button id="gerar-relatorio" class="btn-primary">Gerar Relatório</button>
-            <button id="exportar-relatorio" class="btn-secondary">Exportar CSV</button>
-        </div>
-    </div>
+                    <h2>Relatórios Semanais</h2>
+                    
+                    <div class="form-container">
+                        <div class="form-group required">
+                            <label for="semana-relatorio">Selecione a Semana:</label>
+                            <input type="week" id="semana-relatorio" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="aluno-relatorio">Selecione o Aluno:</label>
+                            <select id="aluno-relatorio">
+                                <option value="">Todos os alunos</option>
+                                <!-- Opções preenchidas via JavaScript com atualizarSelectAlunos() -->
+                            </select>
+                        </div>
+                        <div class="buttons">
+                            <button id="gerar-relatorio" class="btn-primary">Gerar Relatório</button>
+                            <button id="exportar-relatorio" class="btn-secondary">Exportar CSV</button>
+                        </div>
+                    </div>
 
-    <div id="resultado-relatorio" class="relatorio-container">
-        <h3>Resumo Semanal</h3>
-        <div class="table-container">
-            <table id="tabela-relatorio">
-                <thead>
-                    <tr>
-                        <th>Data</th>
-                        <th>Status</th>
-                        <th>Aluno</th>
-                        <th>Série</th>
-                        <th>Itens Consumidos</th>
-                        <th>Total</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- Dados do relatório inseridos via JavaScript -->
-                </tbody>
-            </table>
-        </div>
-    </div>
-</section>
+                    <div id="resultado-relatorio" class="relatorio-container">
+                        <h3>Resumo Semanal</h3>
+                        <div class="table-container">
+                            <table id="tabela-relatorio">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Status</th>
+                                        <th>Aluno</th>
+                                        <th>Série</th>
+                                        <th>Itens Consumidos</th>
+                                        <th>Total</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dados do relatório inseridos via JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
 
                 <section id="mensagens" class="page">
                     <h2>Envio de Mensagens</h2>
@@ -377,6 +381,26 @@
                     </div>
                 </section>
             </main>
+
+            <div class="fab-container">
+                <button class="fab-main btn-primary" id="fab-main" tabindex="0">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <div class="fab-menu" id="fab-menu">
+                    <button class="fab-item btn-primary" data-target="alunos" title="Cadastrar Aluno">
+                        <i class="fas fa-user-graduate"></i>
+                        <span>Cadastrar Aluno</span>
+                    </button>
+                    <button class="fab-item btn-primary" data-target="consumo" title="Registrar Consumo">
+                        <i class="fas fa-cash-register"></i>
+                        <span>Registrar Consumo</span>
+                    </button>
+                    <button class="fab-item btn-primary" data-target="mensagens" title="Gerar Mensagens">
+                        <i class="fab fa-whatsapp"></i>
+                        <span>Gerar Mensagens</span>
+                    </button>
+                </div>
+            </div>
 
             <footer>
                 <p>© 2025 Sistema de Cantina do Erlach. Desenvolvida por Werisder Bertoli.</p>

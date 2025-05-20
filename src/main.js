@@ -89,6 +89,14 @@ function navegarPara(pagina) {
     } else {
         console.error(`Página ou item de menu não encontrado: ${pagina}`);
     }
+
+    // Fechar o menu do FAB, se estiver aberto
+    const fabMenu = document.getElementById('fab-menu');
+    const fabMain = document.getElementById('fab-main');
+    if (fabMenu && fabMenu.classList.contains('active')) {
+        fabMenu.classList.remove('active');
+        fabMain.classList.remove('active');
+    }
 }
 
 // Função para obter o número da semana no ano
@@ -388,20 +396,28 @@ function atualizarSelectAlunos() {
     });
 }
 
-function atualizarProdutosConsumo() {
+function atualizarProdutosConsumo(filtro = '') {
     const container = document.getElementById('produtos-consumo');
     container.innerHTML = '';
 
-    produtos.forEach((produto, index) => {
+    const produtosFiltrados = produtos.filter(produto =>
+        produto.nome.toLowerCase().includes(filtro.toLowerCase())
+    );
+
+    produtosFiltrados.forEach((produto, index) => {
+        const originalIndex = produtos.findIndex(p => p.id === produto.id);
         const div = document.createElement('div');
         div.className = 'produto-selecao';
-        div.dataset.index = index;
+        div.dataset.index = originalIndex;
         div.innerHTML = `
             ${produto.imagem ? `<img src="${produto.imagem}" alt="${produto.nome}">` : '<div class="placeholder"><i class="fas fa-cookie-bite"></i></div>'}
             <h4>${produto.nome}</h4>
             <p class="preco">R$ ${produto.preco.toFixed(2).replace('.', ',')}</p>
         `;
-        div.addEventListener('click', () => selecionarProduto(index, div));
+        if (selectedItems.some(item => item.index === originalIndex)) {
+            div.classList.add('selecionado');
+        }
+        div.addEventListener('click', () => selecionarProduto(originalIndex, div));
         container.appendChild(div);
     });
 }
@@ -492,8 +508,10 @@ async function registrarConsumo(event) {
         console.log('Consumo registrado no Firestore:', consumo, 'ID:', docRef.id);
         document.getElementById('consumo-form').reset();
         selectedItems = [];
+        document.getElementById('buscar-produto-consumo').value = ''; // Limpar campo de busca
         document.querySelectorAll('.produto-selecao').forEach(el => el.classList.remove('selecionado'));
         atualizarResumoConsumo();
+        atualizarProdutosConsumo(); // Atualizar produtos com filtro vazio
         carregarConsumos();
         mostrarNotificacao('Consumo registrado com sucesso!');
     } catch (error) {
@@ -599,7 +617,6 @@ async function gerarRelatorio() {
         querySnapshot.forEach(doc => {
             const consumo = doc.data();
             consumo.id = doc.id;
-            // Garantir que o campo 'pago' exista, default para false se não estiver definido
             if (typeof consumo.pago === 'undefined') {
                 consumo.pago = false;
             }
@@ -609,10 +626,8 @@ async function gerarRelatorio() {
         const tbody = document.querySelector('#tabela-relatorio tbody');
         tbody.innerHTML = '';
 
-        // Ordenar os consumos por data (do mais recente para o mais antigo)
         consumosFiltrados.sort((a, b) => new Date(b.data) - new Date(a.data));
 
-        // Exibir cada consumo como uma linha separada
         consumosFiltrados.forEach((consumo, index) => {
             const aluno = alunos[consumo.alunoIndex] || { nome: 'Desconhecido', serie: 'N/A' };
             const itens = consumo.itens.map(item => `${item.nome} (x${item.quantidade})`).join(', ');
@@ -649,7 +664,6 @@ async function togglePagamento(id, index) {
     const { doc, updateDoc } = window.firestoreModules;
     const db = window.db;
 
-    // Seleciona o botão de edição dentro da linha correspondente
     const row = document.querySelector(`#tabela-relatorio tbody tr:nth-child(${index + 1})`);
     const btn = row.querySelector('.acao-btn.editar');
     btn.disabled = true;
@@ -661,15 +675,14 @@ async function togglePagamento(id, index) {
         const novoStatus = !consumo.pago;
         await updateDoc(consumoRef, { pago: novoStatus });
         console.log(`Status de pagamento atualizado para ${novoStatus} - ID: ${id}`);
-        consumo.pago = novoStatus; // Atualiza o status localmente
-        await gerarRelatorio(); // Re-gerar o relatório para refletir a mudança
+        consumo.pago = novoStatus;
+        await gerarRelatorio();
         mostrarNotificacao(`Status de pagamento alterado para ${novoStatus ? 'pago' : 'aberto'} com sucesso!`);
     } catch (error) {
         console.error('Erro ao atualizar pagamento:', error);
         mostrarNotificacao('Erro ao atualizar pagamento: ' + error.message, 'error');
     } finally {
         btn.disabled = false;
-        // Atualiza o ícone com base no novo status
         const consumo = consumos.find(c => c.id === id);
         btn.innerHTML = `<i class="fas ${consumo.pago ? 'fa-lock' : 'fa-unlock'}"></i>`;
     }
@@ -689,7 +702,7 @@ async function excluirConsumoRelatorio(id, index) {
         await deleteDoc(doc(db, 'consumos', id));
         console.log('Consumo excluído do Firestore:', id);
         carregarConsumos();
-        gerarRelatorio(); // Re-gerar o relatório para refletir a exclusão
+        gerarRelatorio();
         atualizarDashboard();
         mostrarNotificacao('Consumo excluído com sucesso!');
     } catch (error) {
@@ -787,7 +800,7 @@ async function gerarMensagens() {
     }
 }
 
-function copiarMensagem(button, texto) {
+function copiarMens_absolute_pathagem(button, texto) {
     navigator.clipboard.writeText(texto).then(() => {
         button.textContent = 'Copiado!';
         setTimeout(() => (button.textContent = 'Copiar'), 2000);
@@ -1030,6 +1043,39 @@ function carregarDados() {
     carregarConsumos();
 }
 
+// Inicializar FAB
+function inicializarFAB() {
+    const fabMain = document.getElementById('fab-main');
+    const fabMenu = document.getElementById('fab-menu');
+
+    if (!fabMain || !fabMenu) {
+        console.error('Elementos do FAB não encontrados.');
+        return;
+    }
+
+    fabMain.addEventListener('click', () => {
+        fabMenu.classList.toggle('active');
+        fabMain.classList.toggle('active');
+    });
+
+    document.querySelectorAll('.fab-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const target = item.dataset.target;
+            if (target) {
+                navegarPara(target);
+            }
+        });
+    });
+
+    // Fechar o menu do FAB ao clicar fora
+    document.addEventListener('click', (e) => {
+        if (!fabMain.contains(e.target) && !fabMenu.contains(e.target)) {
+            fabMenu.classList.remove('active');
+            fabMain.classList.remove('active');
+        }
+    });
+}
+
 // Navegação de semanas
 document.getElementById('prev-semana').addEventListener('click', () => {
     semanaAtual = (semanaAtual > 1) ? semanaAtual - 1 : 52;
@@ -1074,6 +1120,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('buscar-aluno').addEventListener('input', (e) => atualizarTabelaAlunos(e.target.value));
     document.getElementById('buscar-produto').addEventListener('input', (e) => atualizarListaProdutos(e.target.value));
+    document.getElementById('buscar-produto-consumo').addEventListener('input', (e) => atualizarProdutosConsumo(e.target.value));
 
     document.getElementById('gerar-relatorio').addEventListener('click', gerarRelatorio);
     document.getElementById('exportar-relatorio').addEventListener('click', exportarRelatorio);
@@ -1094,4 +1141,6 @@ document.addEventListener('DOMContentLoaded', () => {
         atualizarProdutosConsumo();
         atualizarTabelaConsumos();
     }
+
+    inicializarFAB();
 });
