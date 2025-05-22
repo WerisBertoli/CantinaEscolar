@@ -118,6 +118,7 @@
                                     <option value="7º ano">7º ano</option>
                                     <option value="8º ano">8º ano</option>
                                     <option value="9º ano">9º ano</option>
+                                    <option value="Professor/a">Professor/a</option>
                                 </select>
                             </div>
                             <div class="form-group required">
@@ -144,7 +145,7 @@
                         <button class="btn-search"><i class="fas fa-search"></i></button>
                     </div>
 
-                    <div class="table-container">
+                    <div class="table-container" id="tabela-alunos-container" style="display: none;">
                         <table id="tabela-alunos">
                             <thead>
                                 <tr>
@@ -202,11 +203,12 @@
                     <div class="form-container">
                         <form id="consumo-form">
                             <div class="form-group required">
-                                <label for="aluno-consumo">Selecione o Aluno:</label>
-                                <select id="aluno-consumo" required>
-                                    <option value="">Selecione um aluno</option>
-                                    <!-- Opções preenchidas via JavaScript -->
-                                </select>
+                                <label for="buscar-aluno-consumo">Buscar Aluno:</label>
+                                <input type="text" id="buscar-aluno-consumo" placeholder="Digite o nome do aluno" required>
+                                <div id="aluno-lista" class="aluno-lista">
+                                    <!-- Resultados da busca de alunos serão inseridos aqui -->
+                                </div>
+                                <input type="hidden" id="aluno-id-selecionado" name="aluno-id">
                             </div>
                             
                             <div class="form-group required">
@@ -219,7 +221,7 @@
                                 <input type="text" id="buscar-produto-consumo" placeholder="Buscar produto...">
                                 <button class="btn-search"><i class="fas fa-search"></i></button>
                             </div>
-                            <div id="produtos-consumo" class="produtos-selecao">
+                            <div id="produtos-consumo" class="produtos-selecao" style="display: none;">
                                 <!-- Produtos serão inseridos via JavaScript -->
                             </div>
 
@@ -242,27 +244,34 @@
                     </div>
 
                     <div class="historico-container">
-                        <h3>Consumos Recentes</h3>
-                        <div class="nav-semana">
-                            <button id="prev-semana" class="btn-secondary">Semana Anterior</button>
-                            <input type="week" id="seletor-semana" required>
-                            <button id="next-semana" class="btn-secondary">Próxima Semana</button>
+                        <div class="historico-header">
+                            <h3>Consumos Recentes</h3>
+                            <button id="toggle-consumos" class="btn-secondary">
+                                <i class="fas fa-chevron-down"></i> Mostrar
+                            </button>
                         </div>
-                        <div class="table-container">
-                            <table id="tabela-consumos">
-                                <thead>
-                                    <tr>
-                                        <th>Data</th>
-                                        <th>Aluno</th>
-                                        <th>Itens</th>
-                                        <th>Total</th>
-                                        <th>Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <!-- Dados dos consumos inseridos via JavaScript -->
-                                </tbody>
-                            </table>
+                        <div id="consumos-recentes" style="display: none;">
+                            <div class="nav-semana">
+                                <button id="prev-semana" class="btn-secondary">Semana Anterior</button>
+                                <input type="week" id="seletor-semana" required>
+                                <button id="next-semana" class="btn-secondary">Próxima Semana</button>
+                            </div>
+                            <div class="table-container">
+                                <table id="tabela-consumos">
+                                    <thead>
+                                        <tr>
+                                            <th>Data</th>
+                                            <th>Aluno</th>
+                                            <th>Itens</th>
+                                            <th>Total</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Dados dos consumos inseridos via JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -405,6 +414,23 @@
             <footer>
                 <p>© 2025 Sistema de Cantina do Erlach. Desenvolvida por Werisder Bertoli.</p>
             </footer>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirmação</h3>
+                <button class="modal-close">×</button>
+            </div>
+            <div class="modal-body">
+                <p id="modal-message">Tem certeza que deseja excluir este item?</p>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-cancel" class="btn-secondary">Cancelar</button>
+                <button id="modal-confirm" class="btn-primary">Confirmar</button>
+            </div>
         </div>
     </div>
 

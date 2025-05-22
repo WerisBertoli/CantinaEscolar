@@ -9,6 +9,13 @@ const logoutBtn = document.getElementById('logout-btn');
 const loginError = document.getElementById('login-error');
 const notificationArea = document.getElementById('notification-area');
 
+// Referências à modal
+const confirmModal = document.getElementById('confirm-modal');
+const modalMessage = document.getElementById('modal-message');
+const modalConfirm = document.getElementById('modal-confirm');
+const modalCancel = document.getElementById('modal-cancel');
+const modalClose = document.querySelector('.modal-close');
+
 // Função para exibir notificações visuais
 function mostrarNotificacao(mensagem, tipo = 'success') {
     const notificacao = document.createElement('div');
@@ -16,6 +23,30 @@ function mostrarNotificacao(mensagem, tipo = 'success') {
     notificacao.className = `notification ${tipo}`;
     notificationArea.appendChild(notificacao);
     setTimeout(() => notificacao.remove(), 3000);
+}
+
+// Função para gerenciar a modal de confirmação
+function showConfirmModal(message, callback) {
+    modalMessage.textContent = message;
+    confirmModal.style.display = 'flex';
+    modalConfirm.onclick = () => {
+        callback(true);
+        confirmModal.style.display = 'none';
+    };
+    modalCancel.onclick = () => {
+        callback(false);
+        confirmModal.style.display = 'none';
+    };
+    modalClose.onclick = () => {
+        callback(false);
+        confirmModal.style.display = 'none';
+    };
+    window.onclick = (event) => {
+        if (event.target === confirmModal) {
+            callback(false);
+            confirmModal.style.display = 'none';
+        }
+    };
 }
 
 // Verificar o estado de autenticação ao carregar a página
@@ -97,6 +128,21 @@ function navegarPara(pagina) {
         fabMenu.classList.remove('active');
         fabMain.classList.remove('active');
     }
+
+    // Ajustes específicos por página
+    if (pagina === 'consumo') {
+        document.getElementById('data-consumo').value = new Date().toISOString().split('T')[0];
+        document.getElementById('seletor-semana').value = `${anoAtual}-W${semanaAtual}`;
+        atualizarProdutosConsumo();
+        atualizarResumoConsumo();
+        atualizarTabelaConsumos();
+    } else if (pagina === 'relatorios') {
+        document.getElementById('semana-relatorio').value = `${anoAtual}-W${semanaAtual}`;
+    } else if (pagina === 'mensagens') {
+        document.getElementById('semana-mensagem').value = `${anoAtual}-W${semanaAtual}`;
+    } else if (pagina === 'ganhos') {
+        document.getElementById('ano-ganhos').value = anoAtual;
+    }
 }
 
 // Função para obter o número da semana no ano
@@ -130,10 +176,10 @@ function atualizarDashboard() {
     const dataFim = new Date(dataInicio);
     dataFim.setDate(dataFim.getDate() + 6);
 
-    const mensagensRecentes = alunos.reduce((count, aluno, index) => {
+    const mensagensRecentes = alunos.reduce((count, aluno) => {
         const consumosAluno = consumos.filter(c => {
             const dataConsumo = new Date(c.data);
-            return dataConsumo >= dataInicio && dataConsumo <= dataFim && c.alunoIndex === index;
+            return dataConsumo >= dataInicio && dataConsumo <= dataFim && c.alunoId === aluno.alunoId;
         });
         return consumosAluno.length > 0 ? count + 1 : count;
     }, 0);
@@ -152,13 +198,21 @@ function atualizarDashboard() {
 // Gerenciar alunos
 function atualizarTabelaAlunos(filtro = '') {
     const tbody = document.querySelector('#tabela-alunos tbody');
+    const container = document.getElementById('tabela-alunos-container');
     tbody.innerHTML = '';
 
     const alunosFiltrados = alunos.filter(aluno =>
         aluno.nome.toLowerCase().includes(filtro.toLowerCase())
     );
 
-    alunosFiltrados.forEach((aluno, index) => {
+    if (filtro.trim() === '' || alunosFiltrados.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+
+    alunosFiltrados.forEach((aluno) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${aluno.nome}</td>
@@ -167,8 +221,8 @@ function atualizarTabelaAlunos(filtro = '') {
             <td>${aluno.contato}</td>
             <td>${aluno.pix || '-'}</td>
             <td>
-                <button class="acao-btn editar" onclick="editarAluno('${aluno.id}', ${index})"><i class="fas fa-edit"></i></button>
-                <button class="acao-btn excluir" onclick="excluirAluno('${aluno.id}', ${index})"><i class="fas fa-trash"></i></button>
+                <button class="acao-btn editar" onclick="editarAluno('${aluno.alunoId}')"><i class="fas fa-edit"></i></button>
+                <button class="acao-btn excluir" onclick="excluirAluno('${aluno.alunoId}')"><i class="fas fa-trash"></i></button>
             </td>
         `;
         tbody.appendChild(tr);
@@ -196,10 +250,11 @@ async function salvarAluno(event) {
     const db = window.db;
 
     try {
-        const aluno = { nome, serie, responsavel, contato, pix: pix || null };
+        const alunoId = crypto.randomUUID();
+        const aluno = { alunoId, nome, serie, responsavel, contato, pix: pix || null };
         const alunosCollection = collection(db, 'alunos');
-        const docRef = await addDoc(alunosCollection, aluno);
-        console.log('Aluno salvo com sucesso:', aluno, 'ID:', docRef.id);
+        await addDoc(alunosCollection, aluno);
+        console.log('Aluno salvo com sucesso:', aluno);
         document.getElementById('aluno-form').reset();
         mostrarNotificacao('Aluno cadastrado com sucesso!');
     } catch (error) {
@@ -211,56 +266,60 @@ async function salvarAluno(event) {
     }
 }
 
-async function editarAluno(id, index) {
-    const aluno = alunos[index];
-    document.getElementById('nome-aluno').value = aluno.nome;
-    document.getElementById('serie-aluno').value = aluno.serie;
-    document.getElementById('responsavel-aluno').value = aluno.responsavel;
-    document.getElementById('contato-aluno').value = aluno.contato;
-    document.getElementById('pix-aluno').value = aluno.pix;
+async function editarAluno(alunoId) {
+    const aluno = alunos.find(a => a.alunoId === alunoId);
+    if (aluno) {
+        document.getElementById('nome-aluno').value = aluno.nome;
+        document.getElementById('serie-aluno').value = aluno.serie;
+        document.getElementById('responsavel-aluno').value = aluno.responsavel;
+        document.getElementById('contato-aluno').value = aluno.contato;
+        document.getElementById('pix-aluno').value = aluno.pix || '';
 
-    const { doc, deleteDoc } = window.firestoreModules;
-    const db = window.db;
+        const { doc, deleteDoc } = window.firestoreModules;
+        const db = window.db;
 
-    const btn = document.querySelector('#aluno-form .btn-primary');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Editando...';
+        const btn = document.querySelector('#aluno-form .btn-primary');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Editando...';
 
-    try {
-        await deleteDoc(doc(db, 'alunos', id));
-        console.log('Aluno removido para edição:', id);
-    } catch (error) {
-        console.error('Erro ao remover aluno para edição:', error);
-        mostrarNotificacao('Erro ao editar aluno. Tente novamente.', 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Salvar';
+        try {
+            await deleteDoc(doc(db, 'alunos', alunoId));
+            console.log('Aluno removido para edição:', alunoId);
+        } catch (error) {
+            console.error('Erro ao remover aluno para edição:', error);
+            mostrarNotificacao('Erro ao editar aluno. Tente novamente.', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = 'Salvar';
+        }
     }
 }
 
-async function excluirAluno(id, index) {
-    if (!confirm('Tem certeza que deseja excluir este aluno?')) return;
+async function excluirAluno(alunoId) {
+    showConfirmModal('Tem certeza que deseja excluir este aluno?', async (confirmed) => {
+        if (confirmed) {
+            const { doc, deleteDoc } = window.firestoreModules;
+            const db = window.db;
 
-    const { doc, deleteDoc } = window.firestoreModules;
-    const db = window.db;
+            const btn = document.querySelector('#tabela-alunos .acao-btn.excluir');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-    const btn = document.querySelector('#tabela-alunos .acao-btn.excluir');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-    try {
-        await deleteDoc(doc(db, 'alunos', id));
-        console.log('Aluno excluído do Firestore:', id);
-        atualizarDashboard();
-        atualizarSelectAlunos();
-        mostrarNotificacao('Aluno excluído com sucesso!');
-    } catch (error) {
-        console.error('Erro ao excluir aluno:', error);
-        mostrarNotificacao('Erro ao excluir aluno: ' + error.message, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-trash"></i>';
-    }
+            try {
+                await deleteDoc(doc(db, 'alunos', alunoId));
+                console.log('Aluno excluído do Firestore:', alunoId);
+                atualizarDashboard();
+                atualizarSelectAlunos();
+                mostrarNotificacao('Aluno excluído com sucesso!');
+            } catch (error) {
+                console.error('Erro ao excluir aluno:', error);
+                mostrarNotificacao('Erro ao excluir aluno: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-trash"></i>';
+            }
+        }
+    });
 }
 
 // Gerenciar produtos
@@ -272,7 +331,7 @@ function atualizarListaProdutos(filtro = '') {
         produto.nome.toLowerCase().includes(filtro.toLowerCase())
     );
 
-    produtosFiltrados.forEach((produto, index) => {
+    produtosFiltrados.forEach((produto) => {
         const card = document.createElement('div');
         card.className = 'produto-card';
         card.innerHTML = `
@@ -283,8 +342,8 @@ function atualizarListaProdutos(filtro = '') {
                 <h4>${produto.nome}</h4>
                 <p class="preco">R$ ${produto.preco.toFixed(2).replace('.', ',')}</p>
                 <div class="produto-acoes">
-                    <button class="acao-btn editar" onclick="editarProduto('${produto.id}', ${index})"><i class="fas fa-edit"></i></button>
-                    <button class="acao-btn excluir" onclick="excluirProduto('${produto.id}', ${index})"><i class="fas fa-trash"></i></button>
+                    <button class="acao-btn editar" onclick="editarProduto('${produto.id}')"><i class="fas fa-edit"></i></button>
+                    <button class="acao-btn excluir" onclick="excluirProduto('${produto.id}')"><i class="fas fa-trash"></i></button>
                 </div>
             </div>
         `;
@@ -326,71 +385,68 @@ async function salvarProduto(event) {
     }
 }
 
-async function editarProduto(id, index) {
-    const produto = produtos[index];
-    document.getElementById('nome-produto').value = produto.nome;
-    document.getElementById('preco-produto').value = produto.preco;
-    document.getElementById('imagem-produto').value = produto.imagem;
+async function editarProduto(id) {
+    const produto = produtos.find(p => p.id === id);
+    if (produto) {
+        document.getElementById('nome-produto').value = produto.nome;
+        document.getElementById('preco-produto').value = produto.preco;
+        document.getElementById('imagem-produto').value = produto.imagem || '';
 
-    const { doc, deleteDoc } = window.firestoreModules;
-    const db = window.db;
+        const { doc, deleteDoc } = window.firestoreModules;
+        const db = window.db;
 
-    const btn = document.querySelector('#produto-form .btn-primary');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Editando...';
+        const btn = document.querySelector('#produto-form .btn-primary');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Editando...';
 
-    try {
-        await deleteDoc(doc(db, 'produtos', id));
-        console.log('Produto removido para edição:', id);
-    } catch (error) {
-        console.error('Erro ao remover produto para edição:', error);
-        mostrarNotificacao('Erro ao editar produto. Tente novamente.', 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Salvar';
+        try {
+            await deleteDoc(doc(db, 'produtos', id));
+            console.log('Produto removido para edição:', id);
+        } catch (error) {
+            console.error('Erro ao remover produto para edição:', error);
+            mostrarNotificacao('Erro ao editar produto. Tente novamente.', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = 'Salvar';
+        }
     }
 }
 
-async function excluirProduto(id, index) {
-    if (!confirm('Tem certeza que deseja excluir este produto?')) return;
+async function excluirProduto(id) {
+    showConfirmModal('Tem certeza que deseja excluir este produto?', async (confirmed) => {
+        if (confirmed) {
+            const { doc, deleteDoc } = window.firestoreModules;
+            const db = window.db;
 
-    const { doc, deleteDoc } = window.firestoreModules;
-    const db = window.db;
+            const btn = document.querySelector('#lista-produtos .acao-btn.excluir');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-    const btn = document.querySelector('#lista-produtos .acao-btn.excluir');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-    try {
-        await deleteDoc(doc(db, 'produtos', id));
-        console.log('Produto excluído do Firestore:', id);
-        atualizarDashboard();
-        atualizarProdutosConsumo();
-        mostrarNotificacao('Produto excluído com sucesso!');
-    } catch (error) {
-        console.error('Erro ao excluir produto:', error);
-        mostrarNotificacao('Erro ao excluir produto: ' + error.message, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-trash"></i>';
-    }
+            try {
+                await deleteDoc(doc(db, 'produtos', id));
+                console.log('Produto excluído do Firestore:', id);
+                atualizarDashboard();
+                atualizarProdutosConsumo();
+                mostrarNotificacao('Produto excluído com sucesso!');
+            } catch (error) {
+                console.error('Erro ao excluir produto:', error);
+                mostrarNotificacao('Erro ao excluir produto: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-trash"></i>';
+            }
+        }
+    });
 }
 
 // Registro de consumo
 function atualizarSelectAlunos() {
-    const select = document.getElementById('aluno-consumo');
     const selectRelatorio = document.getElementById('aluno-relatorio');
-    select.innerHTML = '<option value="">Selecione um aluno</option>';
     selectRelatorio.innerHTML = '<option value="">Todos os alunos</option>';
 
-    alunos.forEach((aluno, index) => {
-        const option = document.createElement('option');
-        option.value = index;
-        option.textContent = `${aluno.nome} (${aluno.serie})`;
-        select.appendChild(option);
-
+    alunos.forEach((aluno) => {
         const optionRelatorio = document.createElement('option');
-        optionRelatorio.value = index;
+        optionRelatorio.value = aluno.alunoId;
         optionRelatorio.textContent = `${aluno.nome} (${aluno.serie})`;
         selectRelatorio.appendChild(optionRelatorio);
     });
@@ -404,6 +460,13 @@ function atualizarProdutosConsumo(filtro = '') {
         produto.nome.toLowerCase().includes(filtro.toLowerCase())
     );
 
+    if (filtro.trim() === '' || produtosFiltrados.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'grid';
+
     produtosFiltrados.forEach((produto, index) => {
         const originalIndex = produtos.findIndex(p => p.id === produto.id);
         const div = document.createElement('div');
@@ -414,7 +477,7 @@ function atualizarProdutosConsumo(filtro = '') {
             <h4>${produto.nome}</h4>
             <p class="preco">R$ ${produto.preco.toFixed(2).replace('.', ',')}</p>
         `;
-        if (selectedItems.some(item => item.index === originalIndex)) {
+        if (selectedItems.some(item => item.produtoIndex === originalIndex)) {
             div.classList.add('selecionado');
         }
         div.addEventListener('click', () => selecionarProduto(originalIndex, div));
@@ -422,17 +485,93 @@ function atualizarProdutosConsumo(filtro = '') {
     });
 }
 
+function atualizarListaAlunos(filtro = '') {
+    const container = document.getElementById('aluno-lista');
+    const inputBusca = document.getElementById('buscar-aluno-consumo');
+    container.innerHTML = '';
+
+    const alunosFiltrados = alunos.filter(aluno =>
+        aluno.nome.toLowerCase().includes(filtro.toLowerCase())
+    );
+
+    if (alunosFiltrados.length === 0) {
+        container.innerHTML = '<div class="aluno-item">Nenhum aluno encontrado</div>';
+        return;
+    }
+
+    alunosFiltrados.forEach((aluno) => {
+        const div = document.createElement('div');
+        div.className = 'aluno-item';
+        div.dataset.alunoId = aluno.alunoId;
+        div.textContent = `${aluno.nome} (${aluno.serie})`;
+        div.addEventListener('click', () => selecionarAluno(aluno.alunoId, div));
+        container.appendChild(div);
+    });
+
+    if (filtro.trim() !== '' || inputBusca === document.activeElement) {
+        container.style.display = 'block';
+    } else {
+        container.style.display = 'none';
+    }
+}
+
+function selecionarAluno(alunoId, elemento) {
+    const aluno = alunos.find(a => a.alunoId === alunoId);
+    if (!aluno) {
+        console.error('Aluno não encontrado:', alunoId);
+        return;
+    }
+
+    document.getElementById('buscar-aluno-consumo').value = `${aluno.nome} (${aluno.serie})`;
+    document.getElementById('aluno-id-selecionado').value = alunoId;
+
+    document.querySelectorAll('.aluno-item').forEach(item => item.classList.remove('selecionado'));
+    elemento.classList.add('selecionado');
+    document.getElementById('aluno-lista').style.display = 'none';
+}
+
 function selecionarProduto(index, elemento) {
     const produto = produtos[index];
-    const existingItem = selectedItems.find(item => item.index === index);
+    const alunoId = document.getElementById('aluno-id-selecionado').value;
+
+    if (!alunoId) {
+        mostrarNotificacao('Selecione um aluno antes de adicionar produtos.', 'error');
+        return;
+    }
+
+    const existingItem = selectedItems.find(item => item.produtoIndex === index && item.alunoId === alunoId);
 
     if (existingItem) {
         existingItem.quantidade++;
     } else {
-        selectedItems.push({ index, nome: produto.nome, preco: produto.preco, quantidade: 1 });
+        selectedItems.push({
+            produtoIndex: index,
+            alunoId: alunoId,
+            nome: produto.nome,
+            preco: produto.preco,
+            quantidade: 1
+        });
         elemento.classList.add('selecionado');
     }
 
+    // Limpar o campo de pesquisa de produtos
+    const inputProduto = document.getElementById('buscar-produto-consumo');
+    inputProduto.value = '';
+
+    // Remover o card da visualização (mas não da lista de produtos geral)
+    elemento.style.display = 'none';
+
+    // Se não houver mais produtos visíveis, esconder o container
+    const container = document.getElementById('produtos-consumo');
+    const visibleItems = container.querySelectorAll('.produto-selecao[style*="display: none"]').length;
+    if (visibleItems === produtos.length) {
+        container.style.display = 'none';
+    }
+
+    // Atualizar a lista de produtos para refletir a pesquisa limpa
+    atualizarProdutosConsumo('');
+
+    // Atualizar o resumo de consumo
     atualizarResumoConsumo();
 }
 
@@ -465,25 +604,27 @@ function removerItemConsumo(index) {
         item.quantidade--;
     } else {
         selectedItems.splice(index, 1);
-        const elemento = document.querySelector(`.produto-selecao[data-index="${item.index}"]`);
+        const elemento = document.querySelector(`.produto-selecao[data-index="${item.produtoIndex}"]`);
         if (elemento) elemento.classList.remove('selecionado');
     }
     atualizarResumoConsumo();
+    atualizarProdutosConsumo(document.getElementById('buscar-produto-consumo').value);
 }
 
 async function registrarConsumo(event) {
     event.preventDefault();
-    const alunoIndex = document.getElementById('aluno-consumo').value;
+    const alunoId = document.getElementById('aluno-id-selecionado').value;
     const data = document.getElementById('data-consumo').value;
 
-    if (!alunoIndex || !data || selectedItems.length === 0) {
+    if (!alunoId || !data || selectedItems.length === 0) {
         mostrarNotificacao('Preencha todos os campos e selecione pelo menos um produto.', 'error');
         return;
     }
 
-    const alunoSelecionado = alunos[parseInt(alunoIndex)];
+    const alunoSelecionado = alunos.find(a => a.alunoId === alunoId);
     if (!alunoSelecionado) {
         mostrarNotificacao('Aluno inválido. Por favor, selecione um aluno válido.', 'error');
+        console.error('Aluno não encontrado para o ID:', alunoId);
         return;
     }
 
@@ -496,7 +637,7 @@ async function registrarConsumo(event) {
 
     try {
         const consumo = {
-            alunoIndex: parseInt(alunoIndex),
+            alunoId: alunoId,
             alunoNome: alunoSelecionado.nome,
             data,
             itens: selectedItems.map(item => ({ nome: item.nome, preco: item.preco, quantidade: item.quantidade })),
@@ -507,11 +648,16 @@ async function registrarConsumo(event) {
         const docRef = await addDoc(consumosCollection, consumo);
         console.log('Consumo registrado no Firestore:', consumo, 'ID:', docRef.id);
         document.getElementById('consumo-form').reset();
+        document.getElementById('aluno-id-selecionado').value = '';
+        document.getElementById('buscar-aluno-consumo').value = '';
         selectedItems = [];
-        document.getElementById('buscar-produto-consumo').value = ''; // Limpar campo de busca
-        document.querySelectorAll('.produto-selecao').forEach(el => el.classList.remove('selecionado'));
+        document.getElementById('buscar-produto-consumo').value = '';
+        document.querySelectorAll('.produto-selecao').forEach(el => {
+            el.classList.remove('selecionado');
+            el.style.display = 'block'; // Restaurar visibilidade dos cards ao registrar
+        });
         atualizarResumoConsumo();
-        atualizarProdutosConsumo(); // Atualizar produtos com filtro vazio
+        atualizarListaAlunos();
         carregarConsumos();
         mostrarNotificacao('Consumo registrado com sucesso!');
     } catch (error) {
@@ -542,8 +688,8 @@ function atualizarTabelaConsumos() {
         return;
     }
 
-    consumosFiltrados.forEach((consumo, index) => {
-        const aluno = alunos[consumo.alunoIndex] || { nome: 'Desconhecido' };
+    consumosFiltrados.forEach((consumo) => {
+        const aluno = alunos.find(a => a.alunoId === consumo.alunoId) || { nome: 'Desconhecido' };
         const itens = consumo.itens.map(item => `${item.nome} (x${item.quantidade})`).join(', ');
         const dataFormatada = consumo.data.split('T')[0].split('-').reverse().join('/');
         const tr = document.createElement('tr');
@@ -553,42 +699,44 @@ function atualizarTabelaConsumos() {
             <td>${itens}</td>
             <td>R$ ${consumo.total.toFixed(2).replace('.', ',')}</td>
             <td>
-                <button class="acao-btn excluir" onclick="excluirConsumo('${consumo.id}', ${index})"><i class="fas fa-trash"></i></button>
+                <button class="acao-btn excluir" onclick="excluirConsumo('${consumo.id}')"><i class="fas fa-trash"></i></button>
             </td>
         `;
         tbody.appendChild(tr);
     });
 }
 
-async function excluirConsumo(id, index) {
-    if (!confirm('Tem certeza que deseja excluir este consumo?')) return;
+async function excluirConsumo(id) {
+    showConfirmModal('Tem certeza que deseja excluir este consumo?', async (confirmed) => {
+        if (confirmed) {
+            const { doc, deleteDoc } = window.firestoreModules;
+            const db = window.db;
 
-    const { doc, deleteDoc } = window.firestoreModules;
-    const db = window.db;
+            const btn = document.querySelector('#tabela-consumos .acao-btn.excluir');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-    const btn = document.querySelector('#tabela-consumos .acao-btn.excluir');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-    try {
-        await deleteDoc(doc(db, 'consumos', id));
-        console.log('Consumo excluído do Firestore:', id);
-        carregarConsumos();
-        atualizarDashboard();
-        mostrarNotificacao('Consumo excluído com sucesso!');
-    } catch (error) {
-        console.error('Erro ao excluir consumo:', error);
-        mostrarNotificacao('Erro ao excluir consumo: ' + error.message, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-trash"></i>';
-    }
+            try {
+                await deleteDoc(doc(db, 'consumos', id));
+                console.log('Consumo excluído do Firestore:', id);
+                carregarConsumos();
+                atualizarDashboard();
+                mostrarNotificacao('Consumo excluído com sucesso!');
+            } catch (error) {
+                console.error('Erro ao excluir consumo:', error);
+                mostrarNotificacao('Erro ao excluir consumo: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-trash"></i>';
+            }
+        }
+    });
 }
 
 // Relatórios
 async function gerarRelatorio() {
     const semana = document.getElementById('semana-relatorio').value;
-    const alunoIndex = document.getElementById('aluno-relatorio').value;
+    const alunoId = document.getElementById('aluno-relatorio').value;
     const [ano, semanaNum] = semana.split('-W');
     const dataInicio = new Date(ano, 0, 1 + (semanaNum - 1) * 7);
     dataInicio.setDate(dataInicio.getDate() - dataInicio.getDay() + 1);
@@ -609,8 +757,8 @@ async function gerarRelatorio() {
             where('data', '>=', dataInicio.toISOString().split('T')[0]),
             where('data', '<=', dataFim.toISOString().split('T')[0])
         );
-        if (alunoIndex !== '') {
-            q = query(q, where('alunoIndex', '==', parseInt(alunoIndex)));
+        if (alunoId !== '') {
+            q = query(q, where('alunoId', '==', alunoId));
         }
         const querySnapshot = await getDocs(q);
         const consumosFiltrados = [];
@@ -628,8 +776,8 @@ async function gerarRelatorio() {
 
         consumosFiltrados.sort((a, b) => new Date(b.data) - new Date(a.data));
 
-        consumosFiltrados.forEach((consumo, index) => {
-            const aluno = alunos[consumo.alunoIndex] || { nome: 'Desconhecido', serie: 'N/A' };
+        consumosFiltrados.forEach((consumo) => {
+            const aluno = alunos.find(a => a.alunoId === consumo.alunoId) || { nome: 'Desconhecido', serie: 'N/A' };
             const itens = consumo.itens.map(item => `${item.nome} (x${item.quantidade})`).join(', ');
             const dataFormatada = consumo.data.split('T')[0].split('-').reverse().join('/');
             const statusClass = consumo.pago ? 'status-pago' : 'status-aberto';
@@ -642,8 +790,8 @@ async function gerarRelatorio() {
                 <td>${itens}</td>
                 <td>R$ ${consumo.total.toFixed(2).replace('.', ',')}</td>
                 <td>
-                    <button class="acao-btn editar" onclick="togglePagamento('${consumo.id}', ${index})"><i class="fas ${consumo.pago ? 'fa-lock' : 'fa-unlock'}"></i></button>
-                    <button class="acao-btn excluir" onclick="excluirConsumoRelatorio('${consumo.id}', ${index})"><i class="fas fa-trash"></i></button>
+                    <button class="acao-btn editar" onclick="togglePagamento('${consumo.id}')"><i class="fas ${consumo.pago ? 'fa-lock' : 'fa-unlock'}"></i></button>
+                    <button class="acao-btn excluir" onclick="excluirConsumoRelatorio('${consumo.id}')"><i class="fas fa-trash"></i></button>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -660,18 +808,19 @@ async function gerarRelatorio() {
     }
 }
 
-async function togglePagamento(id, index) {
+async function togglePagamento(id) {
     const { doc, updateDoc } = window.firestoreModules;
     const db = window.db;
 
-    const row = document.querySelector(`#tabela-relatorio tbody tr:nth-child(${index + 1})`);
-    const btn = row.querySelector('.acao-btn.editar');
+    const consumo = consumos.find(c => c.id === id);
+    if (!consumo) return;
+
+    const btn = document.querySelector(`#tabela-relatorio .acao-btn.editar`);
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
     try {
         const consumoRef = doc(db, 'consumos', id);
-        const consumo = consumos.find(c => c.id === id);
         const novoStatus = !consumo.pago;
         await updateDoc(consumoRef, { pago: novoStatus });
         console.log(`Status de pagamento atualizado para ${novoStatus} - ID: ${id}`);
@@ -683,35 +832,36 @@ async function togglePagamento(id, index) {
         mostrarNotificacao('Erro ao atualizar pagamento: ' + error.message, 'error');
     } finally {
         btn.disabled = false;
-        const consumo = consumos.find(c => c.id === id);
         btn.innerHTML = `<i class="fas ${consumo.pago ? 'fa-lock' : 'fa-unlock'}"></i>`;
     }
 }
 
-async function excluirConsumoRelatorio(id, index) {
-    if (!confirm('Tem certeza que deseja excluir este consumo?')) return;
+async function excluirConsumoRelatorio(id) {
+    showConfirmModal('Tem certeza que deseja excluir este consumo?', async (confirmed) => {
+        if (confirmed) {
+            const { doc, deleteDoc } = window.firestoreModules;
+            const db = window.db;
 
-    const { doc, deleteDoc } = window.firestoreModules;
-    const db = window.db;
+            const btn = document.querySelector(`#tabela-relatorio .acao-btn.excluir`);
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-    const btn = document.querySelector(`#tabela-relatorio .acao-btn.excluir:nth-child(${index + 1})`);
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-    try {
-        await deleteDoc(doc(db, 'consumos', id));
-        console.log('Consumo excluído do Firestore:', id);
-        carregarConsumos();
-        gerarRelatorio();
-        atualizarDashboard();
-        mostrarNotificacao('Consumo excluído com sucesso!');
-    } catch (error) {
-        console.error('Erro ao excluir consumo:', error);
-        mostrarNotificacao('Erro ao excluir consumo: ' + error.message, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-trash"></i>';
-    }
+            try {
+                await deleteDoc(doc(db, 'consumos', id));
+                console.log('Consumo excluído do Firestore:', id);
+                carregarConsumos();
+                gerarRelatorio();
+                atualizarDashboard();
+                mostrarNotificacao('Consumo excluído com sucesso!');
+            } catch (error) {
+                console.error('Erro ao excluir consumo:', error);
+                mostrarNotificacao('Erro ao excluir consumo: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-trash"></i>';
+            }
+        }
+    });
 }
 
 // Mensagens WhatsApp
@@ -751,8 +901,8 @@ async function gerarMensagens() {
         const container = document.getElementById('lista-mensagens');
         container.innerHTML = '';
 
-        alunos.forEach((aluno, index) => {
-            const consumosAluno = consumosFiltrados.filter(c => c.alunoIndex === index && !c.pago);
+        alunos.forEach((aluno) => {
+            const consumosAluno = consumosFiltrados.filter(c => c.alunoId === aluno.alunoId && !c.pago);
             if (consumosAluno.length === 0) return;
 
             const consumosPorDia = {};
@@ -800,10 +950,10 @@ async function gerarMensagens() {
     }
 }
 
-function copiarMens_absolute_pathagem(button, texto) {
+function copiarMensagem(button, texto) {
     navigator.clipboard.writeText(texto).then(() => {
-        button.textContent = 'Copiado!';
-        setTimeout(() => (button.textContent = 'Copiar'), 2000);
+        button.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+        setTimeout(() => (button.innerHTML = '<i class="fas fa-copy"></i> Copiar'), 2000);
         mostrarNotificacao('Mensagem copiada para a área de transferência!');
     });
 }
@@ -897,6 +1047,8 @@ async function gerarGanhos() {
             `;
             tbodyMensais.appendChild(tr);
         });
+
+        mostrarNotificacao('Resumo de ganhos gerado com sucesso!');
     } catch (error) {
         console.error('Erro ao gerar ganhos:', error);
         mostrarNotificacao('Erro ao gerar ganhos: ' + error.message, 'error');
@@ -1012,7 +1164,7 @@ function carregarDados() {
         alunos = [];
         snapshot.forEach((doc) => {
             const aluno = doc.data();
-            aluno.id = doc.id;
+            aluno.alunoId = doc.id;
             alunos.push(aluno);
         });
         atualizarTabelaAlunos();
@@ -1067,7 +1219,6 @@ function inicializarFAB() {
         });
     });
 
-    // Fechar o menu do FAB ao clicar fora
     document.addEventListener('click', (e) => {
         if (!fabMain.contains(e.target) && !fabMenu.contains(e.target)) {
             fabMenu.classList.remove('active');
@@ -1078,69 +1229,100 @@ function inicializarFAB() {
 
 // Navegação de semanas
 document.getElementById('prev-semana').addEventListener('click', () => {
-    semanaAtual = (semanaAtual > 1) ? semanaAtual - 1 : 52;
-    document.getElementById('seletor-semana').value = `${anoAtual}-W${semanaAtual}`;
+    semanaAtual = (parseInt(semanaAtual) > 1) ? parseInt(semanaAtual) - 1 : 52;
+    if (semanaAtual === 52) anoAtual--;
+    if (semanaAtual === 1) anoAtual++;
+    document.getElementById('seletor-semana').value = `${anoAtual}-W${semanaAtual.toString().padStart(2, '0')}`;
     atualizarTabelaConsumos();
 });
 
 document.getElementById('next-semana').addEventListener('click', () => {
-    semanaAtual = (semanaAtual < 52) ? parseInt(semanaAtual) + 1 : 1;
-    document.getElementById('seletor-semana').value = `${anoAtual}-W${semanaAtual}`;
+    semanaAtual = (parseInt(semanaAtual) < 52) ? parseInt(semanaAtual) + 1 : 1;
+    if (semanaAtual === 1) anoAtual++;
+    if (semanaAtual === 52) anoAtual--;
+    document.getElementById('seletor-semana').value = `${anoAtual}-W${semanaAtual.toString().padStart(2, '0')}`;
     atualizarTabelaConsumos();
 });
 
 document.getElementById('seletor-semana').addEventListener('change', (e) => {
     const [ano, semana] = e.target.value.split('-W');
-    semanaAtual = semana;
-    anoAtual = ano;
+    semanaAtual = parseInt(semana);
+    anoAtual = parseInt(ano);
     atualizarTabelaConsumos();
+});
+
+// Alternar visibilidade dos consumos recentes
+document.getElementById('toggle-consumos').addEventListener('click', () => {
+    const container = document.getElementById('consumos-recentes');
+    const button = document.getElementById('toggle-consumos');
+    const isVisible = container.style.display === 'block';
+
+    if (isVisible) {
+        container.style.display = 'none';
+        button.innerHTML = '<i class="fas fa-chevron-down"></i> Mostrar';
+    } else {
+        container.style.display = 'block';
+        button.innerHTML = '<i class="fas fa-chevron-up"></i> Esconder';
+    }
 });
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM carregado, configurando menu...');
-    const menuItems = document.querySelectorAll('.menu-item');
-    console.log(`Encontrados ${menuItems.length} itens de menu`);
-    menuItems.forEach(item => {
+    // Inicializar FAB
+    inicializarFAB();
+
+    // Carregar dados do Firestore
+    carregarDados();
+
+    // Inicializar dashboard
+    atualizarDashboard();
+
+    // Eventos de navegação do menu
+    document.querySelectorAll('.menu-item').forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
             const target = item.dataset.target;
-            console.log(`Menu item clicado: ${target}`);
-            navegarPara(target);
+            if (target) {
+                navegarPara(target);
+            }
         });
     });
 
-    document.getElementById('menu-toggle').addEventListener('click', () => {
-        document.getElementById('main-menu').classList.toggle('active');
+    // Menu responsivo
+    const menuToggle = document.getElementById('menu-toggle');
+    const menu = document.getElementById('main-menu');
+    menuToggle.addEventListener('click', () => {
+        menu.classList.toggle('active');
     });
 
+    // Formulário de aluno
     document.getElementById('aluno-form').addEventListener('submit', salvarAluno);
-    document.getElementById('produto-form').addEventListener('submit', salvarProduto);
-    document.getElementById('consumo-form').addEventListener('submit', registrarConsumo);
-
     document.getElementById('buscar-aluno').addEventListener('input', (e) => atualizarTabelaAlunos(e.target.value));
+
+    // Formulário de produto
+    document.getElementById('produto-form').addEventListener('submit', salvarProduto);
     document.getElementById('buscar-produto').addEventListener('input', (e) => atualizarListaProdutos(e.target.value));
+
+    // Formulário de consumo
+    document.getElementById('consumo-form').addEventListener('submit', registrarConsumo);
+    document.getElementById('buscar-aluno-consumo').addEventListener('input', (e) => atualizarListaAlunos(e.target.value));
     document.getElementById('buscar-produto-consumo').addEventListener('input', (e) => atualizarProdutosConsumo(e.target.value));
 
+    // Botões de relatório
     document.getElementById('gerar-relatorio').addEventListener('click', gerarRelatorio);
     document.getElementById('exportar-relatorio').addEventListener('click', exportarRelatorio);
+
+    // Botões de mensagens
     document.getElementById('gerar-mensagens').addEventListener('click', gerarMensagens);
 
+    // Botões de ganhos
     document.getElementById('gerar-ganhos').addEventListener('click', gerarGanhos);
     document.getElementById('exportar-ganhos').addEventListener('click', exportarGanhos);
 
+    // Configurações iniciais
+    document.getElementById('data-consumo').value = new Date().toISOString().split('T')[0];
     document.getElementById('seletor-semana').value = `${anoAtual}-W${semanaAtual}`;
-    if (window.db) {
-        carregarDados();
-    } else {
-        console.error('Firestore não inicializado, pulando carregamento de dados');
-        atualizarDashboard();
-        atualizarTabelaAlunos();
-        atualizarListaProdutos();
-        atualizarSelectAlunos();
-        atualizarProdutosConsumo();
-        atualizarTabelaConsumos();
-    }
-
-    inicializarFAB();
+    document.getElementById('semana-relatorio').value = `${anoAtual}-W${semanaAtual}`;
+    document.getElementById('semana-mensagem').value = `${anoAtual}-W${semanaAtual}`;
+    document.getElementById('ano-ganhos').value = anoAtual;
 });
