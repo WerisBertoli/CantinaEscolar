@@ -129,6 +129,12 @@ function navegarPara(pagina) {
         fabMain.classList.remove('active');
     }
 
+    // Fechar o menu hambúrguer (responsivo), se estiver aberto
+    const mainMenu = document.getElementById('main-menu');
+    if (mainMenu && mainMenu.classList.contains('active')) {
+        mainMenu.classList.remove('active');
+    }
+
     // Ajustes específicos por página
     if (pagina === 'consumo') {
         document.getElementById('data-consumo').value = new Date().toISOString().split('T')[0];

@@ -1,6 +1,6 @@
 /* Estilos gerais */
 :root {
-  --primary-color: #df5b5b; /* Azul mais vibrante */
+  --primary-color: #df5b5b; 
   --primary-dark: #ffa4a4;
   --primary-light: #d4d8de;
   --secondary-color: #ff6f61; /* Laranja suave */
@@ -33,7 +33,7 @@ body {
   align-items: center;
   justify-content: center;
   height: 100vh;
-  background: linear-gradient(135deg, #1a252f 0%, #ffffff 150%);
+  background: var(--dark-color);
   position: fixed;
   top: 0;
   left: 0;
@@ -56,15 +56,15 @@ body {
 
 /* Login */
 .login-box {
-  background-color: white;
+  background-color: rgb(74, 74, 74);
   padding: 2.5rem;
   border-radius: 16px;
   box-shadow: 0 6px 15px rgba(0, 0, 0, 0.5);
   width: 100%;
   max-width: 420px;
   text-align: center;
-  border: 2px solid #000;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(26, 37, 47, 0.05)); /* Uso de var(--dark-color) no gradiente */
+  border: 5px solid var(--primary-color);
+  background: var(--light-color); 
 }
 
 .login-box h2 {
@@ -1133,7 +1133,7 @@ footer {
     top: 60px;
     left: 0;
     width: 100%;
-    background-color: white;
+    background-color: var(--dark-color);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     border-radius: 0 0 12px 12px;
   }
