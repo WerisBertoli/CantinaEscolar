@@ -739,15 +739,14 @@ async function excluirConsumo(id) {
     });
 }
 
-// Relatórios
 async function gerarRelatorio() {
     const semana = document.getElementById('semana-relatorio').value;
     const alunoId = document.getElementById('aluno-relatorio').value;
     const [ano, semanaNum] = semana.split('-W');
     const dataInicio = new Date(ano, 0, 1 + (semanaNum - 1) * 7);
-    dataInicio.setDate(dataInicio.getDate() - dataInicio.getDay() + 1);
+    dataInicio.setDate(dataInicio.getDate() - dataInicio.getDay() + 1); // Segunda-feira
     const dataFim = new Date(dataInicio);
-    dataFim.setDate(dataFim.getDate() + 6);
+    dataFim.setDate(dataFim.getDate() + 4); // Sexta-feira
 
     const btn = document.getElementById('gerar-relatorio');
     btn.disabled = true;
@@ -776,34 +775,72 @@ async function gerarRelatorio() {
             }
             consumosFiltrados.push(consumo);
         });
+        console.log('Consumos filtrados:', consumosFiltrados);
+
+        // Agrupar consumos por aluno
+        const consumosPorAluno = {};
+        consumosFiltrados.forEach(consumo => {
+            if (!consumo.alunoId) {
+                console.warn('Consumo sem alunoId:', consumo.id);
+                return;
+            }
+            if (!consumosPorAluno[consumo.alunoId]) {
+                const aluno = alunos.find(a => a.alunoId === consumo.alunoId) || { nome: 'Desconhecido', serie: 'N/A' };
+                consumosPorAluno[consumo.alunoId] = {
+                    aluno: aluno,
+                    consumos: [],
+                    itensAgrupados: {},
+                    total: 0,
+                    todosPagos: true,
+                    consumoIds: []
+                };
+            }
+            consumosPorAluno[consumo.alunoId].consumos.push(consumo);
+            consumosPorAluno[consumo.alunoId].consumoIds.push(consumo.id);
+            consumosPorAluno[consumo.alunoId].total += consumo.total || 0;
+            if (!consumo.pago) {
+                consumosPorAluno[consumo.alunoId].todosPagos = false;
+            }
+            if (consumo.itens && Array.isArray(consumo.itens)) {
+                consumo.itens.forEach(item => {
+                    if (item.nome && item.quantidade) {
+                        if (!consumosPorAluno[consumo.alunoId].itensAgrupados[item.nome]) {
+                            consumosPorAluno[consumo.alunoId].itensAgrupados[item.nome] = 0;
+                        }
+                        consumosPorAluno[consumo.alunoId].itensAgrupados[item.nome] += item.quantidade;
+                    }
+                });
+            }
+        });
+        console.log('Consumos por aluno:', consumosPorAluno);
 
         const tbody = document.querySelector('#tabela-relatorio tbody');
         tbody.innerHTML = '';
 
-        consumosFiltrados.sort((a, b) => new Date(b.data) - new Date(a.data));
-
-        consumosFiltrados.forEach((consumo) => {
-            const aluno = alunos.find(a => a.alunoId === consumo.alunoId) || { nome: 'Desconhecido', serie: 'N/A' };
-            const itens = consumo.itens.map(item => `${item.nome} (x${item.quantidade})`).join(', ');
-            const dataFormatada = consumo.data.split('T')[0].split('-').reverse().join('/');
-            const statusClass = consumo.pago ? 'status-pago' : 'status-aberto';
+        Object.values(consumosPorAluno).sort((a, b) => a.aluno.nome.localeCompare(b.aluno.nome)).forEach(({ aluno, itensAgrupados, total, todosPagos, consumoIds }) => {
+            const itensTexto = Object.entries(itensAgrupados)
+                .map(([nome, quantidade]) => `${nome} (x${quantidade})`)
+                .join(', ');
+            const statusClass = todosPagos ? 'status-pago' : 'status-aberto';
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${dataFormatada}</td>
-                <td><span class="status-bolinha ${statusClass}"></span>${consumo.pago ? 'Pago' : 'Aberto'}</td>
                 <td>${aluno.nome}</td>
                 <td>${aluno.serie}</td>
-                <td>${itens}</td>
-                <td>R$ ${consumo.total.toFixed(2).replace('.', ',')}</td>
+                <td>${itensTexto || 'Nenhum item'}</td>
+                <td>R$ ${total.toFixed(2).replace('.', ',')}</td>
+                <td><span class="status-bolinha ${statusClass}"></span>${todosPagos ? 'Pago' : 'Aberto'}</td>
                 <td>
-                    <button class="acao-btn editar" onclick="togglePagamento('${consumo.id}')"><i class="fas ${consumo.pago ? 'fa-lock' : 'fa-unlock'}"></i></button>
-                    <button class="acao-btn excluir" onclick="excluirConsumoRelatorio('${consumo.id}')"><i class="fas fa-trash"></i></button>
+                    <button class="acao-btn editar" onclick="togglePagamento('${consumoIds.join(',')}')"><i class="fas ${todosPagos ? 'fa-lock' : 'fa-unlock'}"></i></button>
+                    <button class="acao-btn excluir" onclick="excluirConsumoRelatorio('${consumoIds.join(',')}')"><i class="fas fa-trash"></i></button>
                 </td>
             `;
             tbody.appendChild(tr);
         });
 
         document.getElementById('resultado-relatorio').classList.add('ativo');
+        if (Object.keys(consumosPorAluno).length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-message">Nenhum consumo encontrado para o período selecionado.</td></tr>';
+        }
         mostrarNotificacao('Relatório gerado com sucesso!');
     } catch (error) {
         console.error('Erro ao gerar relatório:', error);
@@ -814,23 +851,40 @@ async function gerarRelatorio() {
     }
 }
 
-async function togglePagamento(id) {
+async function togglePagamento(consumoIds) {
     const { doc, updateDoc } = window.firestoreModules;
     const db = window.db;
 
-    const consumo = consumos.find(c => c.id === id);
-    if (!consumo) return;
+    const ids = consumoIds.split(',').filter(id => id);
+    if (ids.length === 0) {
+        console.warn('Nenhum consumoId fornecido para togglePagamento');
+        return;
+    }
 
     const btn = document.querySelector(`#tabela-relatorio .acao-btn.editar`);
+    if (!btn) {
+        console.error('Botão de edição não encontrado');
+        return;
+    }
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
     try {
-        const consumoRef = doc(db, 'consumos', id);
-        const novoStatus = !consumo.pago;
-        await updateDoc(consumoRef, { pago: novoStatus });
-        console.log(`Status de pagamento atualizado para ${novoStatus} - ID: ${id}`);
-        consumo.pago = novoStatus;
+        const consumosValidos = consumos.filter(c => ids.includes(c.id));
+        if (consumosValidos.length === 0) {
+            throw new Error('Nenhum consumo válido encontrado para os IDs fornecidos');
+        }
+        const todosPagos = consumosValidos.every(c => c.pago);
+        const novoStatus = !todosPagos;
+
+        for (const id of ids) {
+            const consumoRef = doc(db, 'consumos', id);
+            await updateDoc(consumoRef, { pago: novoStatus });
+            console.log(`Status de pagamento atualizado para ${novoStatus} - ID: ${id}`);
+            const consumo = consumos.find(c => c.id === id);
+            if (consumo) consumo.pago = novoStatus;
+        }
+
         await gerarRelatorio();
         mostrarNotificacao(`Status de pagamento alterado para ${novoStatus ? 'pago' : 'aberto'} com sucesso!`);
     } catch (error) {
@@ -838,30 +892,40 @@ async function togglePagamento(id) {
         mostrarNotificacao('Erro ao atualizar pagamento: ' + error.message, 'error');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = `<i class="fas ${consumo.pago ? 'fa-lock' : 'fa-unlock'}"></i>`;
+        btn.innerHTML = `<i class="fas ${novoStatus ? 'fa-lock' : 'fa-unlock'}"></i>`;
     }
 }
 
-async function excluirConsumoRelatorio(id) {
-    showConfirmModal('Tem certeza que deseja excluir este consumo?', async (confirmed) => {
+async function excluirConsumoRelatorio(consumoIds) {
+    showConfirmModal('Tem certeza que deseja excluir todos os consumos deste aluno para esta semana?', async (confirmed) => {
         if (confirmed) {
             const { doc, deleteDoc } = window.firestoreModules;
             const db = window.db;
 
             const btn = document.querySelector(`#tabela-relatorio .acao-btn.excluir`);
+            if (!btn) {
+                console.error('Botão de exclusão não encontrado');
+                return;
+            }
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
             try {
-                await deleteDoc(doc(db, 'consumos', id));
-                console.log('Consumo excluído do Firestore:', id);
+                const ids = consumoIds.split(',').filter(id => id);
+                if (ids.length === 0) {
+                    throw new Error('Nenhum consumoId fornecido para exclusão');
+                }
+                for (const id of ids) {
+                    await deleteDoc(doc(db, 'consumos', id));
+                    console.log('Consumo excluído do Firestore:', id);
+                }
                 carregarConsumos();
                 gerarRelatorio();
                 atualizarDashboard();
-                mostrarNotificacao('Consumo excluído com sucesso!');
+                mostrarNotificacao('Consumos excluídos com sucesso!');
             } catch (error) {
-                console.error('Erro ao excluir consumo:', error);
-                mostrarNotificacao('Erro ao excluir consumo: ' + error.message, 'error');
+                console.error('Erro ao excluir consumos:', error);
+                mostrarNotificacao('Erro ao excluir consumos: ' + error.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-trash"></i>';
