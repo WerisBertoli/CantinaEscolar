@@ -875,9 +875,9 @@ async function gerarMensagens() {
     const semana = document.getElementById('semana-mensagem').value;
     const [ano, semanaNum] = semana.split('-W');
     const dataInicio = new Date(ano, 0, 1 + (semanaNum - 1) * 7);
-    dataInicio.setDate(dataInicio.getDate() - dataInicio.getDay() + 1);
+    dataInicio.setDate(dataInicio.getDate() - dataInicio.getDay() + 1); // Segunda-feira
     const dataFim = new Date(dataInicio);
-    dataFim.setDate(dataFim.getDate() + 6);
+    dataFim.setDate(dataFim.getDate() + 4); // Domingo
 
     const btn = document.getElementById('gerar-mensagens');
     btn.disabled = true;
@@ -919,8 +919,10 @@ async function gerarMensagens() {
                     consumosPorDia[dataFormatada] = [];
                 }
                 c.itens.forEach(item => {
-                    consumosPorDia[dataFormatada].push(`${item.quantidade}x ${item.nome}`);
-                    total += item.preco * item.quantidade;
+                    const valorItem = item.preco * item.quantidade;
+                    const itemTexto = `${item.quantidade}x ${item.nome} - R$ ${valorItem.toFixed(2).replace('.', ',')}`;
+                    consumosPorDia[dataFormatada].push(itemTexto);
+                    total += valorItem;
                 });
             });
 
@@ -929,7 +931,10 @@ async function gerarMensagens() {
                 itensTexto += `${data}:\n- ${itens.join('\n- ')}\n\n`;
             }
 
-            const mensagem = `Olá, ${aluno.responsavel}! O aluno ${aluno.nome} tem um saldo de R$ ${total.toFixed(2).replace('.', ',')} referente aos itens consumidos entre ${dataInicio.toLocaleDateString('pt-BR')} e ${dataFim.toLocaleDateString('pt-BR')}:\n\n${itensTexto}Por favor, realize o pagamento. Chave PIX: ${aluno.pix || 'Não informada'}. Obrigado!`;
+            const mensagem = `Olá, ${aluno.responsavel}. Tudo bem?\n\nO(a) aluno(a) ${aluno.nome} possui um saldo de R$ ${total.toFixed(2).replace('.', ',')} referente ao consumo na cantina entre os dias ${dataInicio.toLocaleDateString('pt-BR')} e ${dataFim.toLocaleDateString('pt-BR')}:\n\n${itensTexto}Solicitamos, por gentileza, que o pagamento seja realizado via PIX para a chave: ${aluno.pix || 'Não informada'}.\n\nCaso o pagamento já tenha sido realizado, por favor, desconsidere esta mensagem.\nPara quaisquer dúvidas, estamos à disposição.
+
+Atenciosamente,
+Equipe Cantina Erlach`;
 
             const div = document.createElement('div');
             div.className = 'mensagem-card';
@@ -940,12 +945,13 @@ async function gerarMensagens() {
                 </div>
                 <div class="mensagem-texto">${mensagem}</div>
                 <div class="mensagem-acoes">
-                    <button class="btn-copiar" onclick="copiarMensagem(this, '${mensagem}')"><i class="fas fa-copy"></i> Copiar</button>
+                    <button class="btn-copiar" onclick="copiarMensagem(this, \`${mensagem}\`)"><i class="fas fa-copy"></i> Copiar</button>
                     <button class="btn-whatsapp" onclick="enviarWhatsApp('${aluno.contato}', '${encodeURIComponent(mensagem)}')"><i class="fab fa-whatsapp"></i> Enviar</button>
                 </div>
             `;
             container.appendChild(div);
         });
+
         mostrarNotificacao('Mensagens geradas com sucesso!');
     } catch (error) {
         console.error('Erro ao gerar mensagens:', error);
@@ -1300,6 +1306,27 @@ document.addEventListener('DOMContentLoaded', () => {
     menuToggle.addEventListener('click', () => {
         menu.classList.toggle('active');
     });
+
+    document.addEventListener('DOMContentLoaded', () => {
+    const menuToggle = document.getElementById('menu-toggle');
+    const menu = document.getElementById('main-menu');
+    const nav = document.querySelector('header nav');
+
+    if (menuToggle && menu && nav) {
+        menuToggle.addEventListener('click', () => {
+            menu.classList.toggle('active');
+            nav.classList.toggle('active');
+        });
+    }
+
+    // Fechar o menu ao clicar fora dele
+    document.addEventListener('click', (e) => {
+        if (!menuToggle.contains(e.target) && !menu.contains(e.target)) {
+            menu.classList.remove('active');
+            nav.classList.remove('active');
+        }
+    });
+});
 
     // Formulário de aluno
     document.getElementById('aluno-form').addEventListener('submit', salvarAluno);
