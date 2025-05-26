@@ -1135,35 +1135,68 @@ async function gerarGanhos() {
 }
 
 function exportarRelatorio() {
+    const semana = document.getElementById('semana-relatorio').value;
+    if (!semana) {
+        mostrarNotificacao('Selecione uma semana antes de exportar.', 'error');
+        return;
+    }
+
     const btn = document.getElementById('exportar-relatorio');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exportando...';
 
     const tbody = document.querySelector('#tabela-relatorio tbody');
-    let csv = 'Data,Status,Aluno,Série,Itens Consumidos,Total\n';
+    const rows = tbody.querySelectorAll('tr');
 
-    tbody.querySelectorAll('tr').forEach(tr => {
+    if (rows.length === 0 || rows[0].querySelector('td.empty-message')) {
+        mostrarNotificacao('Nenhum dado disponível para exportar.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = 'Exportar Relatório';
+        return;
+    }
+
+    // Função para escapar valores do CSV
+    const escapeCSV = (value) => {
+        if (value == null) return '';
+        const str = String(value).replace(/\n/g, ' ').trim(); // Substituir quebras de linha por espaço
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+    };
+
+    // Gerar CSV
+    const csvRows = ['Nome,Série,Itens,Total,Status'];
+    rows.forEach(tr => {
         const cols = tr.querySelectorAll('td');
+        const statusText = cols[4].textContent.replace(/^[●\s]+/, ''); // Remover bolinha e espaços
         const row = [
-            cols[0].textContent,
-            cols[1].textContent.split('\n')[0].trim(),
-            cols[2].textContent,
-            cols[3].textContent,
-            `"${cols[4].textContent}"`,
-            cols[5].textContent
+            escapeCSV(cols[0].textContent), // Nome
+            escapeCSV(cols[1].textContent), // Série
+            escapeCSV(cols[2].textContent), // Itens
+            escapeCSV(cols[3].textContent.replace('R$ ', '')), // Total (remover "R$ ")
+            escapeCSV(statusText) // Status
         ].join(',');
-        csv += row + '\n';
+        csvRows.push(row);
     });
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'relatorio_cantina.csv';
-    link.click();
+    try {
+        // Criar arquivo CSV com BOM para UTF-8
+        const csvString = '\uFEFF' + csvRows.join('\n');
+        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `relatorio_semana_${semana}.csv`;
+        link.click();
 
-    mostrarNotificacao('Relatório exportado com sucesso!');
-    btn.disabled = false;
-    btn.innerHTML = 'Exportar CSV';
+        mostrarNotificacao('Relatório exportado com sucesso!');
+    } catch (error) {
+        console.error('Erro ao exportar relatório:', error);
+        mostrarNotificacao('Erro ao exportar relatório: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Exportar Relatório';
+    }
 }
 
 function exportarGanhos() {
