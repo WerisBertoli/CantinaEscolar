@@ -581,6 +581,7 @@ function selecionarProduto(index, elemento) {
     atualizarResumoConsumo();
 }
 
+// Função para atualizar o resumo de consumo com botões de ajuste de quantidade
 function atualizarResumoConsumo() {
     const container = document.getElementById('itens-selecionados');
     container.innerHTML = '';
@@ -592,7 +593,12 @@ function atualizarResumoConsumo() {
             const div = document.createElement('div');
             div.className = 'itens-selecionados-item';
             div.innerHTML = `
-                <span>${item.nome} (x${item.quantidade})</span>
+                <span>${item.nome}</span>
+                <div class="quantity-controls">
+                    <button class="btn-secondary" onclick="adjustQuantidade(${i}, -1)">−</button>
+                    <span>x${item.quantidade}</span>
+                    <button class="btn-primary" onclick="adjustQuantidade(${i}, 1)">+</button>
+                </div>
                 <span>R$ ${(item.preco * item.quantidade).toFixed(2).replace('.', ',')}</span>
                 <button class="acao-btn excluir" onclick="removerItemConsumo(${i})"><i class="fas fa-trash"></i></button>
             `;
@@ -604,11 +610,11 @@ function atualizarResumoConsumo() {
     document.getElementById('total-consumo').textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
 }
 
-function removerItemConsumo(index) {
+// Função para ajustar a quantidade de um item
+function adjustQuantidade(index, delta) {
     const item = selectedItems[index];
-    if (item.quantidade > 1) {
-        item.quantidade--;
-    } else {
+    item.quantidade += delta;
+    if (item.quantidade <= 0) {
         selectedItems.splice(index, 1);
         const elemento = document.querySelector(`.produto-selecao[data-index="${item.produtoIndex}"]`);
         if (elemento) elemento.classList.remove('selecionado');
@@ -616,6 +622,12 @@ function removerItemConsumo(index) {
     atualizarResumoConsumo();
     atualizarProdutosConsumo(document.getElementById('buscar-produto-consumo').value);
 }
+
+// Modificar a função removerItemConsumo para usar adjustQuantidade
+function removerItemConsumo(index) {
+    adjustQuantidade(index, -selectedItems[index].quantidade);
+}
+
 
 async function registrarConsumo(event) {
     event.preventDefault();

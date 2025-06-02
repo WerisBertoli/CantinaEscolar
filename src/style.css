@@ -713,26 +713,81 @@ tbody tr:hover {
 }
 
 .itens-selecionados-item {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
   align-items: center;
   padding: 0.75rem 0;
   border-bottom: 1px solid var(--light-gray);
+  gap: 0.5rem; /* Espaçamento reduzido */
 }
 
 .itens-selecionados-item span:first-child {
-  flex: 1;
   text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.itens-selecionados-item span:nth-child(2) {
-  min-width: 100px;
+.itens-selecionados-item span:nth-child(3) {
   text-align: right;
   font-family: monospace;
+  min-width: 180px; /* Garantir espaço para o preço */
 }
 
-.itens-selecionados-item button {
-  margin-left: 1rem;
+/* Estilos para controles de quantidade */
+.quantity-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem; /* Botões ainda mais próximos */
+  justify-content: center; /* Centraliza o grupo */
+}
+
+.quantity-controls button {
+  width: 10px; /* Tamanho padrão */
+  height: 10px;
+  border-radius: 25%;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.3s ease;
+}
+
+.quantity-controls .btn-primary {
+  background: var(--dark-color); /* #df5b5b (vermelho suave, ajustar para azul se necessário) */
+  color: white;
+}
+
+.quantity-controls .btn-secondary {
+  background: var(--danger-color); /* #e63946 (vermelho forte) */
+  color: white;
+}
+
+.quantity-controls button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+}
+
+.quantity-controls button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.quantity-controls span {
+  min-width: 50px; /* Espaço para "x1" */
+  text-align: center;
+  font-family: monospace;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.itens-selecionados-item button.excluir {
+  margin-left: 0;
+  justify-self: end;
 }
 
 .empty-message {
@@ -754,6 +809,66 @@ tbody tr:hover {
   min-width: 100px;
   text-align: right;
   font-family: monospace;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .itens-selecionados-item {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 0.3rem; /* Espaçamento ainda menor */
+  }
+
+  .itens-selecionados-item .quantity-controls {
+    grid-column: 1 / 2;
+    grid-row: 2 / 3;
+    gap: 0.5rem; /* Botões ainda mais próximos em telas menores */
+  }
+
+  .itens-selecionados-item span:nth-child(3) {
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+    text-align: right;
+    min-width: 60px; /* Reduzido para telas menores */
+  }
+
+  .itens-selecionados-item button.excluir {
+    grid-column: 2 / 3;
+    grid-row: 2 / 3;
+    justify-self: end;
+  }
+
+  .quantity-controls button {
+    width: 20px; /* Botões menores */
+    height: 20px;
+    font-size: 0.8rem;
+  }
+
+  .quantity-controls span {
+    min-width: 20px; /* Ajustado para centralizar "x1" */
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .itens-selecionados-item {
+    gap: 0.2rem;
+  }
+
+  .quantity-controls button {
+    width: 18px; /* Ainda menores em telas muito pequenas */
+    height: 18px;
+    font-size: 0.7rem;
+  }
+
+  .quantity-controls span {
+    min-width: 18px;
+    font-size: 0.7rem;
+  }
+
+  .itens-selecionados-item span:nth-child(3) {
+    min-width: 50px;
+  }
 }
 
 /* Mensagens */
